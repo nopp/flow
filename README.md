@@ -1,104 +1,171 @@
 # PiaFlow (Go)
 
-Minimal CI/CD system in Go: easy to add apps, easy to maintain. Supports SQLite (dev) and MySQL (prod).
+Minimal CI/CD system in Go with app-level access control by groups.
+Supports SQLite (dev) and MySQL (prod).
 
-## Quick start
+## Quick Start
 
 ```bash
 make tidy
 make run-dev
 ```
 
-Server runs at `http://localhost:8080`. Open it in a browser for the **web UI** (apps list, trigger run, recent runs, view run logs). No login required.
+Server runs at `http://localhost:8080`.
 
-## Running locally vs production
+Default login:
+- Username: `admin`
+- Password: `admin`
 
-- **`make run-dev`** (or `make run`) — Uses **SQLite** with file `data/cicd.db`. No extra config.
-- **`make run-prod`** — Uses **MySQL**. Set `DB_DSN` before running, e.g.:
-  ```bash
-  export DB_DSN='user:password@tcp(host:3306)/dbname?parseTime=true'
-  make run-prod
-  ```
-  Or copy `config/database.example.env` to `config/database.env`, fill in your MySQL credentials, then:
-  ```bash
-  source config/database.env && make run-prod
-  ```
-  (`config/database.env` is gitignored; do not commit credentials.)
+You can override bootstrap admin credentials with:
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
 
-## Documentation
+## Run Modes
 
-- **[CODE.md](CODE.md)** — Code reference: every package, file, type, and function with a short description.
-- **Web docs** — In the UI, click **Docs** (or open `/docs.html`) for architecture, API, pipeline, and frontend documentation.
-- In-code docs — All Go packages and public symbols have doc comments; use `go doc` or your IDE.
+- `make run-dev` (or `make run`): uses SQLite at `data/cicd.db`
+- `make run-prod`: uses MySQL (set `DB_DSN`)
 
-## Pipeline steps
+MySQL example:
 
-Each run runs **up to three steps** in order:
+```bash
+export DB_DSN='user:password@tcp(host:3306)/dbname?parseTime=true'
+make run-prod
+```
 
-1. **Test** – runs `test_cmd` (e.g. `go test ./...`)
-2. **Build** – runs `build_cmd` (e.g. `go build ...`)
-3. **Deploy** – runs `deploy_cmd` if set (optional; leave empty to skip)
+## Authentication and Access Model
 
-Before that, the pipeline clones or pulls the repo. If any step fails, the run stops and is marked as failed. The run log (see `GET /runs/{id}`) shows each step with `=== Step: test ===`, `=== Step: build ===`, `=== Step: deploy ===`.
+- Login is required for API and UI features.
+- Sessions are cookie-based (`HttpOnly`).
+- `admin` users can manage users, groups, app-group bindings, and app lifecycle.
+- Non-admin users can:
+  - view only apps allowed by their groups
+  - run allowed apps
+  - edit allowed apps
+  - view only runs of allowed apps
+  - change their own password
 
-## Adding apps
+## Web UI
 
-Edit **`config/apps.yaml`** and add a new entry under `apps`:
+Main pages:
+- `/login.html` — login
+- `/` — recent runs
+- `/apps.html` — apps list and app actions
+- `/profile.html` — current user profile (name, groups, accessible repos/apps, change password)
+- `/access.html` — admin-only access management (users, groups, app permissions)
+- `/group.html?group_id=<id>` — admin-only group detail editor (members and apps)
+- `/docs.html` — project docs page
+
+Notes:
+- The `Access` link is hidden for non-admin users.
+- If a non-admin directly opens admin-only pages, content is not shown.
+
+## Pipeline Behavior
+
+Each run executes (in order):
+1. `test_cmd`
+2. `build_cmd`
+3. `deploy_cmd` (optional)
+
+Before steps, PiaFlow clones or pulls the app repository into `work/<app_id>/`.
+If any step fails, run status becomes `failed`.
+
+## App Configuration
+
+Apps are stored in `config/apps.yaml`.
+
+Example:
 
 ```yaml
 apps:
-  - id: my-service          # unique id, used in API and DB
-    name: My Service        # display name
+  - id: my-service
+    name: My Service
     repo: https://github.com/org/my-service.git
     branch: main
     build_cmd: go build -o bin/app .
     test_cmd: go test ./...
-    deploy_cmd: ""          # optional; leave empty to skip deploy
+    deploy_cmd: ""
 ```
-
-No code changes needed. Restart the server to pick up new apps (or implement a reload endpoint later).
-
-## Web UI
-
-The UI is served at the root URL (`/`). It lists configured apps (with **Add app**, **Edit**, **Delete**, and **Run**), shows recent runs with status, and offers **live log** by clicking **▶** on a run to expand the log inline (updates in real time while the pipeline is running). Apps can be created, edited, and deleted from the UI; changes are persisted to `config/apps.yaml`.
 
 ## API
 
-All API routes are under `/api`:
+All API routes are under `/api`.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| GET | `/api/apps` | List all apps |
-| POST | `/api/apps` | Create app (body: JSON with id, name, repo, branch, test_cmd, build_cmd, deploy_cmd) |
-| GET | `/api/apps/{appID}` | Get one app config |
-| PUT | `/api/apps/{appID}` | Update app (body: JSON) |
-| DELETE | `/api/apps/{appID}` | Delete app |
-| POST | `/api/apps/{appID}/run` | Trigger a pipeline run (async) |
-| GET | `/api/runs?app_id=&limit=` | List runs (optional filter by app_id) |
-| GET | `/api/runs/{id}` | Get run details and log |
+### Health
+
+- `GET /health`
+
+### Auth
+
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `PUT /api/auth/password` (change current user password)
+- `GET /api/auth/profile` (current user profile, groups, accessible apps/repos)
+
+### Apps
+
+- `GET /api/apps`
+- `POST /api/apps` (admin)
+- `GET /api/apps/{appID}`
+- `PUT /api/apps/{appID}` (admin or allowed non-admin)
+- `DELETE /api/apps/{appID}` (admin)
+- `GET /api/apps/{appID}/groups` (admin)
+- `PUT /api/apps/{appID}/groups` (admin)
+- `POST /api/apps/{appID}/run`
+
+### Runs
+
+- `GET /api/runs?app_id=&limit=&offset=&page=`
+- `GET /api/runs/{id}`
+
+### Users (admin)
+
+- `GET /api/users`
+- `POST /api/users`
+- `PUT /api/users/{userID}/groups`
+- `PUT /api/users/{userID}/password`
+- `DELETE /api/users/{userID}` (admin users cannot be deleted)
+
+### Groups (admin)
+
+- `GET /api/groups`
+- `POST /api/groups`
+- `GET /api/groups/{groupID}`
+- `PUT /api/groups/{groupID}/users`
+- `PUT /api/groups/{groupID}/apps`
 
 ## Data
 
-- **SQLite**: `data/cicd.db` (default). Tables: `runs` (id, app_id, status, commit, log, started_at, ended_at).
-- **Work dir**: `work/` – clones repos under `work/<app_id>/`.
+SQLite default file: `data/cicd.db`
 
-## Prompts and changes
+Main tables:
+- `runs`
+- `users` (`is_admin` included)
+- `groups`
+- `user_groups`
+- `app_groups`
 
-- **`PROMPTS.txt`**: Contains the original request and a section for change requests. Append each new change request there with date and description.
-- **`PROMPT-CRIAR-APP-DO-ZERO.txt`**: Single prompt that describes how to recreate this entire application from scratch (backend, API, UI, config, tests).
+Important behavior:
+- Deleting an app also deletes all runs for that app.
 
 ## Commands
 
-- `make run` – run the server
-- `make build` – build binary to `bin/cicd`
-- `make test` – run tests
-- `make tidy` – go mod tidy
+- `make run` — run server
+- `make build` — build binary to `bin/cicd`
+- `make test` — run tests
+- `make tidy` — `go mod tidy`
 
-## Flags (when running `bin/cicd` or `go run`)
+## Flags
 
-- `-config` – path to apps.yaml (default: config/apps.yaml)
-- `-db` – SQLite path (default: data/cicd.db)
-- `-work` – clone directory (default: work)
-- `-addr` – listen address (default: :8080)
-- `-static` – directory for web UI files (default: web)
+When running `bin/cicd` or `go run ./cmd/cicd`:
+
+- `-config` (default: `config/apps.yaml`)
+- `-db` (default: `data/cicd.db`)
+- `-work` (default: `work`)
+- `-addr` (default: `:8080`)
+- `-static` (default: `web`)
+
+## Documentation
+
+- [CODE.md](CODE.md) — package/file/function reference
+- `/docs.html` — architecture and API docs in the web UI

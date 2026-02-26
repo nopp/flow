@@ -5,296 +5,148 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PiaFlow — Documentation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #0f1419;
-      --bg-card: #1a2129;
+      --card: #1a2129;
       --border: #2d3748;
       --text: #e6edf3;
-      --text-muted: #8b949e;
+      --muted: #8b949e;
       --accent: #58a6ff;
-      --success: #3fb950;
-      --error: #f85149;
-      --radius: 8px;
-      --font: 'DM Sans', system-ui, sans-serif;
+      --font: "DM Sans", system-ui, sans-serif;
     }
     * { box-sizing: border-box; }
     body {
-      font-family: var(--font);
+      margin: 0 auto;
+      max-width: 960px;
+      padding: 2rem;
       background: var(--bg);
       color: var(--text);
+      font-family: var(--font);
       line-height: 1.6;
-      margin: 0;
-      padding: 2rem;
-      max-width: 900px;
-      margin-left: auto;
-      margin-right: auto;
     }
-    h1 { font-size: 1.75rem; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-    h2 { font-size: 1.35rem; margin-top: 2.5rem; color: var(--accent); }
-    h3 { font-size: 1.1rem; margin-top: 1.5rem; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    nav {
-      background: var(--bg-card);
+    h1 { margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.6rem; }
+    h2 { margin-top: 2rem; color: var(--accent); }
+    code, pre {
+      background: var(--card);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1rem 1.25rem;
-      margin-bottom: 2rem;
+      border-radius: 6px;
+      font-size: 0.92rem;
     }
-    nav ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 1rem; }
-    nav a { color: var(--text-muted); }
-    nav a:hover { color: var(--accent); }
-    pre, code {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 0.9rem;
-    }
-    pre { padding: 1rem; overflow-x: auto; }
-    code { padding: 0.2em 0.4em; }
-    pre code { padding: 0; background: none; border: none; }
-    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-    th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
-    th { background: var(--bg-card); color: var(--text-muted); font-weight: 600; }
-    .badge { display: inline-block; padding: 0.2em 0.5em; border-radius: 4px; font-size: 0.85rem; }
-    .badge-get { background: #238636; color: #fff; }
-    .badge-post { background: #1f6feb; color: #fff; }
-    .badge-put { background: #9e6a03; color: #fff; }
-    .badge-delete { background: #da3633; color: #fff; }
-    blockquote { border-left: 4px solid var(--border); margin: 1rem 0; padding-left: 1rem; color: var(--text-muted); }
-    .back-link { display: inline-block; margin-bottom: 1rem; color: var(--text-muted); }
-    .back-link:hover { color: var(--accent); }
+    code { padding: 0.15rem 0.4rem; }
+    pre { padding: 0.9rem 1rem; overflow-x: auto; }
+    pre code { border: none; padding: 0; background: none; }
+    ul { padding-left: 1.2rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.7rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.7rem; text-align: left; }
+    th { background: var(--card); color: var(--muted); }
+    .muted { color: var(--muted); }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); }
   </style>
 </head>
 <body>
-  <a href="/" class="back-link">← Back to PiaFlow</a>
+  <a class="back" href="/">← Back to PiaFlow</a>
 
-  <h1>PiaFlow — Complete Documentation</h1>
-  <p>This document describes the project architecture, every package, API, and feature in detail.</p>
+  <h1>PiaFlow Documentation</h1>
+  <p class="muted">This page reflects the current implementation.</p>
 
-  <nav>
-    <ul>
-      <li><a href="#overview">1. Overview</a></li>
-      <li><a href="#quick-start">2. Quick start</a></li>
-      <li><a href="#architecture">3. Architecture</a></li>
-      <li><a href="#backend">4. Backend (Go)</a></li>
-      <li><a href="#api">5. API reference</a></li>
-      <li><a href="#data">6. Data models</a></li>
-      <li><a href="#pipeline">7. Pipeline</a></li>
-      <li><a href="#frontend">8. Frontend</a></li>
-      <li><a href="#features">9. Features</a></li>
-    </ul>
-  </nav>
+  <h2>Overview</h2>
+  <p>PiaFlow is a lightweight CI/CD server in Go with group-based app access, authentication, and a static web UI.</p>
 
-  <h2 id="overview">1. Overview</h2>
-  <p>PiaFlow is a minimal continuous integration and deployment system written in Go. It allows you to:</p>
+  <h2>Authentication</h2>
   <ul>
-    <li>Define applications via YAML (<code>config/apps.yaml</code>) or the web UI.</li>
-    <li>Run a pipeline per app: <strong>clone</strong> (or pull) the repo → <strong>test</strong> → <strong>build</strong> → <strong>deploy</strong> (optional).</li>
-    <li>Store run history and logs in SQLite.</li>
-    <li>Use a web UI to list apps, trigger runs, view recent runs, and stream logs in real time.</li>
-  </ul>
-  <p>There is no authentication: the UI and API are open. The app list is kept in memory and persisted to YAML; runs are stored in the database.</p>
-  <p>For a full <strong>code reference</strong> (every package, type, and function), see <strong>CODE.md</strong> in the project root. All Go code has doc comments; use <code>go doc</code> or your IDE.</p>
-
-  <h2 id="quick-start">2. Quick start</h2>
-  <pre><code>make tidy
-make run</code></pre>
-  <p>Server listens on <code>http://localhost:8080</code>. Open it in a browser to use the web UI. Flags:</p>
-  <ul>
-    <li><code>-config</code>: path to <code>apps.yaml</code> (default <code>config/apps.yaml</code>)</li>
-    <li><code>-db</code>: SQLite file path (default <code>data/cicd.db</code>)</li>
-    <li><code>-work</code>: directory where repos are cloned (default <code>work</code>)</li>
-    <li><code>-static</code>: directory for web UI files (default <code>web</code>)</li>
-    <li><code>-addr</code>: HTTP listen address (default <code>:8080</code>)</li>
+    <li>Login required for API usage and protected UI features.</li>
+    <li>Cookie-based sessions (<code>HttpOnly</code>).</li>
+    <li>Bootstrap admin is created on startup (default <code>admin/admin</code>).</li>
+    <li>Override bootstrap credentials with <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code>.</li>
   </ul>
 
-  <h2 id="architecture">3. Architecture</h2>
-  <p><strong>Entry point:</strong> <code>cmd/cicd/main.go</code>. It loads config, opens the store, runs seed, creates the pipeline runner and HTTP server, then starts listening.</p>
-  <p><strong>Packages:</strong></p>
+  <h2>Authorization Model</h2>
   <ul>
-    <li><code>internal/config</code> — Load/save apps from YAML.</li>
-    <li><code>internal/store</code> — SQLite: runs, and (for seed) users, groups, app_groups, user_groups.</li>
-    <li><code>internal/pipeline</code> — Runs clone, test, build, deploy in a work directory.</li>
-    <li><code>internal/server</code> — Chi router: health, API routes, static file serving.</li>
-    <li><code>internal/seed</code> — Creates default group and admin user and assigns apps to the default group (used only at startup; no API exposes this).</li>
-    <li><code>internal/auth</code> — Bcrypt <code>HashPassword</code> (used by seed only).</li>
-  </ul>
-  <p><strong>Web UI:</strong> <code>web/index.html</code>, <code>web/css/style.css</code>, <code>web/js/app.js</code>. Served at <code>/</code>; API at <code>/api/*</code>.</p>
-
-  <h2 id="backend">4. Backend (Go) — point by point</h2>
-
-  <h3>4.1 <code>cmd/cicd/main.go</code></h3>
-  <ul>
-    <li>Parses flags: config path, DB path, work dir, static dir, listen address.</li>
-    <li>Creates <code>data/</code> and <code>work/</code> directories if missing.</li>
-    <li><code>config.LoadApps(configPath)</code> reads <code>apps.yaml</code> and returns <code>[]config.App</code>.</li>
-    <li><code>store.New(dbPath)</code> opens SQLite and runs migrations (creates tables if not exist).</li>
-    <li><code>seed.Run(st, apps)</code> ensures a default group and an admin user exist and assigns apps without groups to the default group (internal use only).</li>
-    <li><code>pipeline.NewRunner(workDir)</code> creates the runner that will execute clone/test/build/deploy.</li>
-    <li><code>server.New(apps, st, runner, appsPath, staticPath)</code> builds the HTTP handler with the list of apps, store, runner, and paths to config and static files.</li>
-    <li><code>http.ListenAndServe(addr, srv.Handler())</code> starts the server.</li>
+    <li><strong>Admin</strong>: full access (users/groups/app permissions/app lifecycle).</li>
+    <li><strong>Non-admin</strong>: can only see/run/edit apps allowed by group mappings.</li>
+    <li>Non-admin cannot access admin pages (<code>/access.html</code>, <code>/group.html</code>).</li>
   </ul>
 
-  <h3>4.2 <code>internal/config/config.go</code></h3>
+  <h2>Web Pages</h2>
   <ul>
-    <li><strong>App</strong> struct: <code>ID</code>, <code>Name</code>, <code>Repo</code>, <code>Branch</code>, <code>BuildCmd</code>, <code>TestCmd</code>, <code>DeployCmd</code> (YAML and JSON tags for API).</li>
-    <li><strong>AppsConfig</strong>: root struct with <code>Apps []App</code> for <code>apps.yaml</code>.</li>
-    <li><strong>LoadApps(path)</strong>: reads the file, unmarshals YAML into <code>AppsConfig</code>, returns <code>cfg.Apps</code>.</li>
-    <li><strong>SaveApps(path, apps)</strong>: marshals <code>AppsConfig{Apps: apps}</code> to YAML and writes the file (used when creating/updating/deleting apps via API).</li>
+    <li><code>/login.html</code> — login form</li>
+    <li><code>/</code> — recent runs</li>
+    <li><code>/apps.html</code> — apps list and app actions</li>
+    <li><code>/profile.html</code> — user profile, own groups/apps, own password change</li>
+    <li><code>/access.html</code> — admin access management</li>
+    <li><code>/group.html?group_id=&lt;id&gt;</code> — admin group detail editor</li>
   </ul>
 
-  <h3>4.3 <code>internal/store/store.go</code></h3>
-  <ul>
-    <li><strong>Store</strong>: holds <code>*sql.DB</code>. <strong>New(dbPath)</strong> opens SQLite and runs <strong>migrate(db)</strong>.</li>
-    <li><strong>migrate</strong>: creates tables <code>runs</code>, <code>users</code>, <code>groups</code>, <code>user_groups</code>, <code>app_groups</code> (no sessions table). Indexes on <code>runs(app_id)</code> and <code>runs(started_at)</code>.</li>
-    <li><strong>Run</strong> struct: <code>ID</code>, <code>AppID</code>, <code>Status</code> (pending/running/success/failed), <code>CommitSHA</code>, <code>Log</code>, <code>StartedAt</code>, <code>EndedAt</code>.</li>
-    <li><strong>Runs:</strong> <code>CreateRun(appID, commitSHA)</code>, <code>UpdateRunLog(id, log)</code>, <code>UpdateRunStatus(id, status, log)</code>, <code>GetRun(id)</code>, <code>ListRuns(appID, limit)</code>.</li>
-    <li><strong>Users/Groups (used by seed):</strong> <code>User</code>, <code>Group</code> structs; <code>CreateUser</code>, <code>UserByID</code>, <code>UserByUsername</code>, <code>UserPasswordHash</code>, <code>UserGroupIDs</code>, <code>SetUserGroups</code>, <code>ListUsers</code>; <code>CreateGroup</code>, <code>ListGroups</code>; <code>AppGroupIDs</code>, <code>SetAppGroups</code>, <code>AppIDsByUserGroupIDs</code>.</li>
-    <li><strong>Close()</strong> closes the DB.</li>
-  </ul>
+  <h2>Pipeline</h2>
+  <p>Per run: clone/pull → test → build → deploy (optional). Logs are persisted while running.</p>
 
-  <h3>4.4 <code>internal/pipeline/pipeline.go</code></h3>
-  <ul>
-    <li><strong>Runner</strong>: has <code>workDir</code> (e.g. <code>work/</code>). <strong>NewRunner(workDir)</strong> returns it.</li>
-    <li><strong>Result</strong>: <code>Success bool</code>, <code>Log string</code>.</li>
-    <li><strong>Run(app, onLogUpdate)</strong>:
-      <ol>
-        <li>Creates <code>workDir</code> and <code>workDir/app.ID</code> if needed.</li>
-        <li>If no <code>.git</code> in app dir: <code>git clone --branch &lt;branch&gt; --single-branch &lt;repo&gt; .</code>; else <code>git pull origin &lt;branch&gt;</code>.</li>
-        <li>Appends <code>commit: &lt;sha&gt;</code> from <code>git rev-parse HEAD</code>.</li>
-        <li>Step test: runs <code>TestCmd</code> in app dir (output captured in log); on failure returns <code>Success: false</code>.</li>
-        <li>Step build: runs <code>BuildCmd</code>; same.</li>
-        <li>Step deploy: if <code>DeployCmd</code> is set, runs it; same.</li>
-      </ol>
-    </li>
-    <li>After each log write, <code>onLogUpdate(log.String())</code> is called so the server can persist the log to the DB for real-time streaming.</li>
-    <li><strong>runCmd</strong>: exec in directory, stdout/stderr to process. <strong>runCmdWithLog</strong>: stdout/stderr to a buffer. <strong>output</strong>: captures command output. <strong>splitCommand</strong>: splits a command string respecting quotes (for <code>TestCmd</code>, <code>BuildCmd</code>, <code>DeployCmd</code>).</li>
-  </ul>
+  <h2>API</h2>
+  <p>Base: <code>/api</code></p>
 
-  <h3>4.5 <code>internal/server/server.go</code></h3>
-  <ul>
-    <li><strong>Server</strong>: <code>appsMu</code> (RWMutex), <code>apps []config.App</code>, <code>store *store.Store</code>, <code>runner *pipeline.Runner</code>, <code>appsPath</code>, <code>staticDir</code>.</li>
-    <li><strong>Handler()</strong>: Chi router with <code>Logger</code> and <code>Recoverer</code>. Routes:
-      <ul>
-        <li><code>GET /health</code> → <code>health</code> (200 "ok")</li>
-        <li><code>GET /api/apps</code> → <code>listApps</code></li>
-        <li><code>POST /api/apps</code> → <code>createApp</code></li>
-        <li><code>GET /api/apps/:appID</code> → <code>getApp</code></li>
-        <li><code>PUT /api/apps/:appID</code> → <code>updateApp</code></li>
-        <li><code>DELETE /api/apps/:appID</code> → <code>deleteApp</code></li>
-        <li><code>POST /api/apps/:appID/run</code> → <code>triggerRun</code></li>
-        <li><code>GET /api/runs</code> → <code>listRuns</code></li>
-        <li><code>GET /api/runs/:id</code> → <code>getRun</code></li>
-        <li><code>GET /*</code> → <code>serveStatic</code> (files from <code>staticDir</code>, fallback to <code>index.html</code>)</li>
-      </ul>
-    </li>
-    <li><strong>serveStatic</strong>: <code>/</code> or <code>""</code> → <code>index.html</code>; else path under static dir; if file not found, serve <code>index.html</code> (SPA).</li>
-    <li><strong>listApps</strong>: under read lock, returns <code>[{id, name}]</code> for all apps.</li>
-    <li><strong>getApp</strong>: finds app by <code>appID</code>, returns full app JSON (id, name, repo, branch, test_cmd, build_cmd, deploy_cmd).</li>
-    <li><strong>createApp</strong>: decode JSON into <code>config.App</code>, validate id/name/repo and test_cmd/build_cmd, default branch "main", check duplicate id, append to apps, <code>config.SaveApps</code>, update <code>s.apps</code>, return 201.</li>
-    <li><strong>updateApp</strong>: same validation, find by appID, replace in slice, <code>SaveApps</code>, return 200.</li>
-    <li><strong>deleteApp</strong>: filter out app by id, <code>SaveApps</code>, 204.</li>
-    <li><strong>triggerRun</strong>: find app by id, <code>store.CreateRun(appID, "")</code>, then in a goroutine: <code>UpdateRunStatus(runID, "running", "")</code>, run <code>runner.Run(appCopy, onLogUpdate)</code> where <code>onLogUpdate</code> calls <code>store.UpdateRunLog(runID, log)</code>, then <code>UpdateRunStatus(runID, "success"|"failed", result.Log)</code>. Responds 202 with <code>{run_id, status: "pending"}</code>.</li>
-    <li><strong>listRuns</strong>: query <code>app_id</code>, <code>limit</code> (default 50), <code>store.ListRuns</code>, return JSON array.</li>
-    <li><strong>getRun</strong>: parse id, <code>store.GetRun(id)</code>, return 200 or 404.</li>
-    <li><strong>writeJSON</strong>: sets Content-Type, WriteHeader(status), encodes body.</li>
-  </ul>
-
-  <h3>4.6 <code>internal/seed/seed.go</code></h3>
-  <ul>
-    <li><strong>Run(st, apps)</strong>: If no groups, creates group "default". If no users, hashes "admin" with <code>auth.HashPassword</code>, creates user "admin", sets user to default group. For each app, if it has no group IDs in <code>app_groups</code>, assigns it to the default group. (Used only at startup; no HTTP API for groups/users in the current version.)</li>
-  </ul>
-
-  <h3>4.7 <code>internal/auth/auth.go</code></h3>
-  <ul>
-    <li>Only <strong>HashPassword(password)</strong> (bcrypt cost 10). Used by seed to create the default admin user.</li>
-  </ul>
-
-  <h2 id="api">5. API reference</h2>
-  <p>Base URL: <code>/api</code>. All responses JSON unless noted.</p>
+  <h3>Auth</h3>
   <table>
-    <thead>
-      <tr><th>Method</th><th>Path</th><th>Description</th></tr>
-    </thead>
+    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td><span class="badge badge-get">GET</span></td><td><code>/health</code></td><td>Health check; returns 200 body "ok".</td></tr>
-      <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/apps</code></td><td>List apps: <code>[{id, name}]</code>.</td></tr>
-      <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/apps</code></td><td>Create app. Body: <code>{id, name, repo, branch?, test_cmd, build_cmd, deploy_cmd?}</code>. Returns 201 app or 400/409.</td></tr>
-      <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/apps/:appID</code></td><td>Get one app (full fields). 404 if not found.</td></tr>
-      <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/apps/:appID</code></td><td>Update app. Body: same as create (id ignored). Returns 200 app or 400/404.</td></tr>
-      <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/apps/:appID</code></td><td>Delete app. 204 or 404.</td></tr>
-      <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/apps/:appID/run</code></td><td>Start pipeline. Returns 202 <code>{run_id, status: "pending"}</code> or 404.</td></tr>
-      <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/runs?app_id=&amp;limit=</code></td><td>List runs (optional filter by app_id, limit default 50).</td></tr>
-      <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/runs/:id</code></td><td>Get run by ID: <code>{id, app_id, status, commit_sha, log, started_at, ended_at}</code>.</td></tr>
+      <tr><td>POST</td><td><code>/auth/login</code></td><td>Login</td></tr>
+      <tr><td>POST</td><td><code>/auth/logout</code></td><td>Logout</td></tr>
+      <tr><td>GET</td><td><code>/auth/me</code></td><td>Current session user</td></tr>
+      <tr><td>PUT</td><td><code>/auth/password</code></td><td>Change own password</td></tr>
+      <tr><td>GET</td><td><code>/auth/profile</code></td><td>Current profile (groups + accessible apps)</td></tr>
     </tbody>
   </table>
-  <p>Errors: JSON <code>{ "error": "message" }</code> with appropriate status (400, 404, 409, 500).</p>
 
-  <h2 id="data">6. Data models</h2>
-  <h3>6.1 apps.yaml</h3>
-  <pre><code>apps:
-  - id: my-app
-    name: My App
-    repo: https://github.com/org/repo.git
-    branch: main
-    test_cmd: go test ./...
-    build_cmd: go build -o bin/app .
-    deploy_cmd: ./deploy.sh   # optional</code></pre>
-  <h3>6.2 SQLite — runs</h3>
-  <p><code>runs</code>: id (PK), app_id, status, commit_sha, log, started_at, ended_at. Indexes on app_id and started_at.</p>
-  <h3>6.3 SQLite — seed tables</h3>
-  <p><code>users</code> (id, username, password_hash), <code>groups</code> (id, name), <code>user_groups</code> (user_id, group_id), <code>app_groups</code> (app_id, group_id). Used by seed only; no public API in current version.</p>
+  <h3>Apps and Runs</h3>
+  <table>
+    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/apps</code></td><td>List visible apps</td></tr>
+      <tr><td>POST</td><td><code>/apps</code></td><td>Create app (admin)</td></tr>
+      <tr><td>GET</td><td><code>/apps/{appID}</code></td><td>Get app</td></tr>
+      <tr><td>PUT</td><td><code>/apps/{appID}</code></td><td>Update app (admin or allowed user)</td></tr>
+      <tr><td>DELETE</td><td><code>/apps/{appID}</code></td><td>Delete app (admin)</td></tr>
+      <tr><td>GET</td><td><code>/apps/{appID}/groups</code></td><td>Get app-group bindings (admin)</td></tr>
+      <tr><td>PUT</td><td><code>/apps/{appID}/groups</code></td><td>Set app-group bindings (admin)</td></tr>
+      <tr><td>POST</td><td><code>/apps/{appID}/run</code></td><td>Trigger run</td></tr>
+      <tr><td>GET</td><td><code>/runs</code></td><td>List runs (filtered by access)</td></tr>
+      <tr><td>GET</td><td><code>/runs/{id}</code></td><td>Get one run</td></tr>
+    </tbody>
+  </table>
 
-  <h2 id="pipeline">7. Pipeline flow</h2>
-  <ol>
-    <li><strong>Clone/pull</strong>: <code>work/&lt;app_id&gt;/</code>; if no .git → <code>git clone --branch &lt;branch&gt; --single-branch &lt;repo&gt; .</code>; else <code>git pull origin &lt;branch&gt;</code>.</li>
-    <li><strong>Commit</strong>: log <code>git rev-parse HEAD</code>.</li>
-    <li><strong>Test</strong>: run <code>test_cmd</code> in app dir; output in log. Fail → run marked failed, log saved.</li>
-    <li><strong>Build</strong>: run <code>build_cmd</code>; same.</li>
-    <li><strong>Deploy</strong>: if <code>deploy_cmd</code> set, run it; same.</li>
-  </ol>
-  <p>Commands are split by spaces; quotes allowed. Log is streamed to the DB via <code>onLogUpdate</code> so the UI can poll and show live output.</p>
+  <h3>Users and Groups (Admin)</h3>
+  <table>
+    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/users</code></td><td>List users</td></tr>
+      <tr><td>POST</td><td><code>/users</code></td><td>Create user</td></tr>
+      <tr><td>PUT</td><td><code>/users/{userID}/groups</code></td><td>Set user groups</td></tr>
+      <tr><td>PUT</td><td><code>/users/{userID}/password</code></td><td>Set user password</td></tr>
+      <tr><td>DELETE</td><td><code>/users/{userID}</code></td><td>Delete user (admin users are protected)</td></tr>
+      <tr><td>GET</td><td><code>/groups</code></td><td>List groups</td></tr>
+      <tr><td>POST</td><td><code>/groups</code></td><td>Create group</td></tr>
+      <tr><td>GET</td><td><code>/groups/{groupID}</code></td><td>Group detail with members/apps</td></tr>
+      <tr><td>PUT</td><td><code>/groups/{groupID}/users</code></td><td>Set group members</td></tr>
+      <tr><td>PUT</td><td><code>/groups/{groupID}/apps</code></td><td>Set group apps</td></tr>
+    </tbody>
+  </table>
 
-  <h2 id="frontend">8. Frontend — point by point</h2>
-  <h3>8.1 HTML (<code>web/index.html</code>)</h3>
+  <h2>Data Model</h2>
   <ul>
-    <li>Single screen: header (logo, tagline), main (server-error paragraph, Apps section with add-app-btn and apps-grid, Recent runs section with refresh-runs and runs-container).</li>
-    <li>Overlays: log-overlay (log title, close button, log-content pre); app-form-overlay (form title, close, form with id/name/repo/branch/test_cmd/build_cmd/deploy_cmd, Cancel/Save).</li>
-    <li>Script: <code>/js/app.js</code>.</li>
-    <li>Styles: Google Fonts DM Sans, <code>/css/style.css</code>.</li>
+    <li><code>runs</code></li>
+    <li><code>users</code> (includes <code>is_admin</code>)</li>
+    <li><code>groups</code></li>
+    <li><code>user_groups</code></li>
+    <li><code>app_groups</code></li>
   </ul>
-  <h3>8.2 JavaScript (<code>web/js/app.js</code>)</h3>
-  <ul>
-    <li><strong>fetchApi(path, options)</strong>: <code>fetch(API + path, { method, headers, body })</code>, returns response.</li>
-    <li><strong>API functions</strong>: getApps, triggerRun, getRuns, getRun, createApp, updateApp, deleteApp — call fetchApi and parse JSON or throw.</li>
-    <li><strong>UI helpers</strong>: showToast(msg, type), statusClass(status), formatDate(iso), escapeHtml(s).</li>
-    <li><strong>renderApps(container, apps)</strong>: empty state or cards per app (name, id, Run / Edit / Delete). Run → triggerRun, loadRuns, toast. Edit → openAppForm(id). Delete → confirmDeleteApp(id).</li>
-    <li><strong>renderRuns(container, runs)</strong>: table with expand button per run, id, app_id, status badge, started_at. Expand toggles inline log row; when expanded, polling for that run's log (getRun) every 1.5s until success/failed. Stops inline polling when collapsing. If any run is pending/running, runs list polls every 2s (loadRuns) until none; re-render keeps expanded run re-opened.</li>
-    <li><strong>loadApps</strong>: getApps → renderApps(apps-grid). <strong>loadRuns</strong>: getRuns → renderRuns(runs-container).</li>
-    <li><strong>openAppForm(appId)</strong>: set edit id, show overlay; if appId fetch getApp and fill inputs; else reset form. <strong>closeAppForm</strong>: hide overlay.</li>
-    <li><strong>Form submit</strong>: build app object from inputs, createApp or updateApp, toast, closeForm, loadApps.</li>
-    <li><strong>confirmDeleteApp</strong>: confirm dialog, deleteApp, toast, loadApps.</li>
-    <li><strong>initApp</strong>: Promise.all(loadApps(), loadRuns()). <strong>init()</strong>: checkServerReachable (/health), then initApp or show server-error.</li>
-    <li>Event listeners: add-app-btn → openAppForm(null); app-form close/cancel/overlay click/Escape → closeAppForm; refresh-runs → loadRuns; log-close → hide log overlay. Run expand buttons and inline log polling as above.</li>
-  </ul>
-  <h3>8.3 CSS (<code>web/css/style.css</code>)</h3>
-  <p>Theme (dark): CSS variables for background, card, border, text, accent, success, error. Layout: header, main sections, app cards grid, runs table, overlays and modals (log, app form). Buttons (btn, btn-primary, btn-ghost, btn-icon), form inputs, badges for run status, toast notifications, empty states. Responsive and accessible (focus, aria).</p>
+  <p><strong>Important:</strong> deleting an app also deletes all its runs.</p>
 
-  <h2 id="features">9. Features summary</h2>
+  <h2>References</h2>
   <ul>
-    <li>Configure apps via YAML or web UI (add, edit, delete).</li>
-    <li>Pipeline: clone/pull → test → build → deploy (optional).</li>
-    <li>Trigger run from UI; run executes in background; status and log stored in SQLite.</li>
-    <li>Recent runs table with status and relative time; expand row to see log inline.</li>
-    <li>Real-time log: while a run is pending/running, UI polls run by id and updates the expanded log content.</li>
-    <li>Auto-refresh: while any run is pending/running, the runs list refreshes every 2s; when all finished, polling stops.</li>
-    <li>Health check at <code>/health</code> for readiness.</li>
-    <li>Static web UI and SPA fallback (unknown paths → index.html).</li>
+    <li><a href="/README.md">README.md</a> (project usage guide)</li>
+    <li><a href="/CODE.md">CODE.md</a> (code-level reference)</li>
   </ul>
-
-  <p><a href="/" class="back-link">← Back to PiaFlow</a></p>
 </body>
 </html>
