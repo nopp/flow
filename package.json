@@ -1,0 +1,1 @@
+{"name":"piaflow","private":true,"scripts":{"start":"make run","build":"make build","test":"make test","tidy":"make tidy"}}

@@ -1,0 +1,19 @@
+# Build and runtime
+/bin/
+/data/
+/work/
+*.db
+*.exe
+
+# Do not commit prompt/history files
+PROMPTS.txt
+PROMPT-CRIAR-APP-DO-ZERO.txt
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

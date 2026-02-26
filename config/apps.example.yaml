@@ -1,0 +1,28 @@
+# Example: one app with 3 steps (build, test, deploy)
+# Copy or merge into config/apps.yaml and adjust repo/commands to your project.
+
+apps:
+  - id: my-go-service
+    name: My Go Service
+    repo: https://github.com/your-org/my-go-service.git
+    branch: main
+
+    # Step 1 — Test: run before build
+    test_cmd: go test -v ./...
+
+    # Step 2 — Build: produce binary/artifacts
+    build_cmd: go build -o bin/service ./cmd/server
+
+    # Step 3 — Deploy: script or command to deploy (e.g. copy binary, restart service)
+    deploy_cmd: "./scripts/deploy.sh"
+
+# Minimal example (no deploy step):
+#
+# apps:
+#   - id: simple-app
+#     name: Simple App
+#     repo: https://github.com/org/repo.git
+#     branch: main
+#     test_cmd: go test ./...
+#     build_cmd: go build -o bin/app .
+#     deploy_cmd: ""

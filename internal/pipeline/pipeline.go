@@ -1,0 +1,193 @@
+// Package pipeline runs the CI/CD steps for an app: clone (or pull), test, build, and optionally deploy.
+// Each run executes in a subdirectory of the runner's work dir (work/<app_id>/).
+// Commands are parsed with splitCommand to support quoted arguments.
+package pipeline
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"piaflow/internal/config"
+)
+
+// Runner holds the base directory where app repositories are cloned (e.g. work/).
+// Each app gets workDir/<app.ID>/ as its working directory.
+type Runner struct {
+	workDir string
+}
+
+// NewRunner creates a pipeline runner. workDir is where repos are cloned (e.g. ./work).
+func NewRunner(workDir string) *Runner {
+	return &Runner{workDir: workDir}
+}
+
+// Result holds the outcome of a pipeline run.
+type Result struct {
+	Success bool
+	Log     string
+}
+
+// Run executes clone, test, build, and optionally deploy for the given app.
+// If onLogUpdate is non-nil, it is called with the current log after each step so the UI can stream it.
+func (r *Runner) Run(app config.App, onLogUpdate func(log string)) Result {
+	var log bytes.Buffer
+	appendLog := func(format string, args ...interface{}) {
+		log.WriteString(fmt.Sprintf(format+"\n", args...))
+		if onLogUpdate != nil {
+			onLogUpdate(log.String())
+		}
+	}
+
+	appWorkDir := filepath.Join(r.workDir, app.ID)
+	if err := os.MkdirAll(r.workDir, 0755); err != nil {
+		appendLog("mkdir work dir: %v", err)
+		return Result{Success: false, Log: log.String()}
+	}
+
+	// Clone or pull
+	if _, err := os.Stat(filepath.Join(appWorkDir, ".git")); err != nil {
+		if err := os.MkdirAll(appWorkDir, 0755); err != nil {
+			appendLog("mkdir app dir: %v", err)
+			return Result{Success: false, Log: log.String()}
+		}
+		if err := r.runCmd(appWorkDir, "git", "clone", "--branch", app.Branch, "--single-branch", app.Repo, "."); err != nil {
+			appendLog("git clone: %v", err)
+			return Result{Success: false, Log: log.String()}
+		}
+	} else {
+		if err := r.runCmd(appWorkDir, "git", "pull", "origin", app.Branch); err != nil {
+			appendLog("git pull: %v", err)
+			return Result{Success: false, Log: log.String()}
+		}
+	}
+
+	commit, _ := r.output(appWorkDir, "git", "rev-parse", "HEAD")
+	appendLog("commit: %s", strings.TrimSpace(commit))
+
+	// Step 1: Test
+	if app.TestCmd != "" {
+		appendLog("=== Step: test ===")
+		if err := r.runCmdWithLog(appWorkDir, app.TestCmd, &log); err != nil {
+			if onLogUpdate != nil {
+				onLogUpdate(log.String())
+			}
+			appendLog("test step failed: %v", err)
+			return Result{Success: false, Log: log.String()}
+		}
+		appendLog("test step OK")
+		if app.TestSleepSec > 0 {
+			appendLog("Sleeping %ds after test...", app.TestSleepSec)
+			time.Sleep(time.Duration(app.TestSleepSec) * time.Second)
+			if onLogUpdate != nil {
+				onLogUpdate(log.String())
+			}
+		}
+	}
+
+	// Step 2: Build
+	if app.BuildCmd != "" {
+		appendLog("=== Step: build ===")
+		if err := r.runCmdWithLog(appWorkDir, app.BuildCmd, &log); err != nil {
+			if onLogUpdate != nil {
+				onLogUpdate(log.String())
+			}
+			appendLog("build step failed: %v", err)
+			return Result{Success: false, Log: log.String()}
+		}
+		appendLog("build step OK")
+		if app.BuildSleepSec > 0 {
+			appendLog("Sleeping %ds after build...", app.BuildSleepSec)
+			time.Sleep(time.Duration(app.BuildSleepSec) * time.Second)
+			if onLogUpdate != nil {
+				onLogUpdate(log.String())
+			}
+		}
+	}
+
+	// Step 3: Deploy (optional)
+	if app.DeployCmd != "" {
+		appendLog("=== Step: deploy ===")
+		if err := r.runCmdWithLog(appWorkDir, app.DeployCmd, &log); err != nil {
+			if onLogUpdate != nil {
+				onLogUpdate(log.String())
+			}
+			appendLog("deploy step failed: %v", err)
+			return Result{Success: false, Log: log.String()}
+		}
+		appendLog("deploy step OK")
+		if app.DeploySleepSec > 0 {
+			appendLog("Sleeping %ds after deploy...", app.DeploySleepSec)
+			time.Sleep(time.Duration(app.DeploySleepSec) * time.Second)
+			if onLogUpdate != nil {
+				onLogUpdate(log.String())
+			}
+		}
+	}
+
+	appendLog("pipeline completed successfully")
+	return Result{Success: true, Log: log.String()}
+}
+
+// runCmd runs a command in dir with stdout/stderr attached to the process (for git clone/pull).
+func (r *Runner) runCmd(dir, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// runCmdWithLog runs a shell command (parsed by splitCommand) in dir and writes stdout/stderr to log.
+func (r *Runner) runCmdWithLog(dir, command string, log *bytes.Buffer) error {
+	parts := splitCommand(command)
+	if len(parts) == 0 {
+		return nil
+	}
+	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd.Dir = dir
+	cmd.Stdout = log
+	cmd.Stderr = log
+	return cmd.Run()
+}
+
+// output runs a command in dir and returns its combined stdout.
+func (r *Runner) output(dir, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+// splitCommand splits a command string into parts, respecting single and double quotes.
+// Used to parse TestCmd, BuildCmd, and DeployCmd from the app config.
+func splitCommand(s string) []string {
+	var parts []string
+	var buf strings.Builder
+	quote := false
+	for _, r := range s {
+		switch r {
+		case ' ':
+			if !quote {
+				if buf.Len() > 0 {
+					parts = append(parts, buf.String())
+					buf.Reset()
+				}
+			} else {
+				buf.WriteRune(r)
+			}
+		case '"', '\'':
+			quote = !quote
+		default:
+			buf.WriteRune(r)
+		}
+	}
+	if buf.Len() > 0 {
+		parts = append(parts, buf.String())
+	}
+	return parts
+}
