@@ -1,11 +1,1 @@
-apps:
-    - id: app-teste
-      name: app-teste
-      repo: https://github.com/nopp/app-teste.git
-      branch: main
-      build_cmd: go build -o .
-      test_cmd: go test ./...
-      deploy_cmd: ""
-      test_sleep_sec: 10
-      build_sleep_sec: 0
-      deploy_sleep_sec: 0
+apps: []

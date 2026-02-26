@@ -1,5 +1,5 @@
 // Command cicd is the entry point for the PiaFlow server.
-// It loads apps from YAML, opens the SQLite store, runs the seed, and starts the HTTP server
+// It loads apps from YAML, opens the SQLite store, and starts the HTTP server
 // that serves the web UI and the REST API for apps and runs.
 package main
 
@@ -12,7 +12,6 @@ import (
 
 	"piaflow/internal/config"
 	"piaflow/internal/pipeline"
-	"piaflow/internal/seed"
 	"piaflow/internal/server"
 	"piaflow/internal/store"
 )
@@ -42,8 +41,6 @@ func main() {
 		log.Fatalf("open store: %v", err)
 	}
 	defer st.Close()
-
-	seed.Run(st, apps)
 
 	runner := pipeline.NewRunner(*workDir)
 	absConfig, _ := filepath.Abs(*configPath)
