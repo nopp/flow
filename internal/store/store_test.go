@@ -13,7 +13,7 @@ func TestStore_CreateRun_UpdateRunStatus_GetRun(t *testing.T) {
 	}
 	defer st.Close()
 
-	id, err := st.CreateRun("my-app", "abc123")
+	id, err := st.CreateRun("my-app", "abc123", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestStore_CreateRun_UpdateRunStatus_GetRun(t *testing.T) {
 	if run == nil {
 		t.Fatal("expected run, got nil")
 	}
-	if run.AppID != "my-app" || run.Status != "success" || run.Log != "done" || run.CommitSHA != "abc123" {
+	if run.AppID != "my-app" || run.Status != "success" || run.Log != "done" || run.CommitSHA != "abc123" || run.TriggeredBy != "admin" {
 		t.Errorf("unexpected run: %+v", run)
 	}
 }
@@ -48,9 +48,9 @@ func TestStore_ListRuns(t *testing.T) {
 	}
 	defer st.Close()
 
-	_, _ = st.CreateRun("app1", "")
-	_, _ = st.CreateRun("app1", "")
-	_, _ = st.CreateRun("app2", "")
+	_, _ = st.CreateRun("app1", "", "admin")
+	_, _ = st.CreateRun("app1", "", "admin")
+	_, _ = st.CreateRun("app2", "", "alice")
 
 	runs, err := st.ListRuns("", 10, 0)
 	if err != nil {
@@ -124,9 +124,9 @@ func TestStore_DeleteRunsByAppID(t *testing.T) {
 	}
 	defer st.Close()
 
-	_, _ = st.CreateRun("app1", "")
-	_, _ = st.CreateRun("app1", "")
-	_, _ = st.CreateRun("app2", "")
+	_, _ = st.CreateRun("app1", "", "admin")
+	_, _ = st.CreateRun("app1", "", "admin")
+	_, _ = st.CreateRun("app2", "", "alice")
 
 	if err := st.DeleteRunsByAppID("app1"); err != nil {
 		t.Fatal(err)

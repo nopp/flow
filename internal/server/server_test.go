@@ -166,13 +166,13 @@ func TestServer_DeleteAppAlsoDeletesRuns_AndAdminDeleteBlocked(t *testing.T) {
 	h, st, _, _ := setupTestServer(t, apps)
 	adminCookie := loginAndCookie(t, h, "admin", "admin")
 
-	if _, err := st.CreateRun("app-a", ""); err != nil {
+	if _, err := st.CreateRun("app-a", "", "admin"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateRun("app-a", ""); err != nil {
+	if _, err := st.CreateRun("app-a", "", "admin"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateRun("app-b", ""); err != nil {
+	if _, err := st.CreateRun("app-b", "", "admin"); err != nil {
 		t.Fatal(err)
 	}
 

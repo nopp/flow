@@ -555,7 +555,7 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runID, err := s.store.CreateRun(appID, "")
+	runID, err := s.store.CreateRun(appID, "", user.Username)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

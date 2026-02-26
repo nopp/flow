@@ -15,13 +15,14 @@ import (
 // Run represents a single pipeline run stored in the runs table.
 // Status is one of: pending, running, success, failed.
 type Run struct {
-	ID        int64      `json:"id"`
-	AppID     string     `json:"app_id"`
-	Status    string     `json:"status"` // pending, running, success, failed
-	CommitSHA string     `json:"commit_sha,omitempty"`
-	Log       string     `json:"log,omitempty"`
-	StartedAt time.Time  `json:"started_at"`
-	EndedAt   *time.Time `json:"ended_at,omitempty"`
+	ID          int64      `json:"id"`
+	AppID       string     `json:"app_id"`
+	TriggeredBy string     `json:"triggered_by,omitempty"`
+	Status      string     `json:"status"` // pending, running, success, failed
+	CommitSHA   string     `json:"commit_sha,omitempty"`
+	Log         string     `json:"log,omitempty"`
+	StartedAt   time.Time  `json:"started_at"`
+	EndedAt     *time.Time `json:"ended_at,omitempty"`
 }
 
 // User represents a user and the groups they belong to.
@@ -80,6 +81,7 @@ func migrate(db *sql.DB, driver string) error {
 			CREATE TABLE IF NOT EXISTS runs (
 				id BIGINT AUTO_INCREMENT PRIMARY KEY,
 				app_id VARCHAR(255) NOT NULL,
+				triggered_by VARCHAR(255),
 				status VARCHAR(50) NOT NULL,
 				commit_sha VARCHAR(255),
 				log TEXT,
@@ -90,6 +92,7 @@ func migrate(db *sql.DB, driver string) error {
 		if err != nil {
 			return err
 		}
+		_, _ = db.Exec(`ALTER TABLE runs ADD COLUMN triggered_by VARCHAR(255)`)
 		_, err = db.Exec(`
 			CREATE TABLE IF NOT EXISTS users (
 				id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -145,6 +148,7 @@ func migrate(db *sql.DB, driver string) error {
 		CREATE TABLE IF NOT EXISTS runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			app_id TEXT NOT NULL,
+			triggered_by TEXT,
 			status TEXT NOT NULL,
 			commit_sha TEXT,
 			log TEXT,
@@ -175,15 +179,16 @@ func migrate(db *sql.DB, driver string) error {
 		);
 	`)
 	if err == nil {
+		_, _ = db.Exec(`ALTER TABLE runs ADD COLUMN triggered_by TEXT`)
 		_, _ = db.Exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0`)
 	}
 	return err
 }
 
 // CreateRun inserts a new run and returns its ID.
-func (s *Store) CreateRun(appID, commitSHA string) (int64, error) {
-	query := fmt.Sprintf(`INSERT INTO runs (app_id, status, commit_sha, started_at) VALUES (?, 'pending', ?, %s)`, s.nowExpr())
-	res, err := s.db.Exec(query, appID, commitSHA)
+func (s *Store) CreateRun(appID, commitSHA, triggeredBy string) (int64, error) {
+	query := fmt.Sprintf(`INSERT INTO runs (app_id, triggered_by, status, commit_sha, started_at) VALUES (?, ?, 'pending', ?, %s)`, s.nowExpr())
+	res, err := s.db.Exec(query, appID, triggeredBy, commitSHA)
 	if err != nil {
 		return 0, err
 	}
@@ -212,9 +217,9 @@ func (s *Store) GetRun(id int64) (*Run, error) {
 	var r Run
 	var endedAt sql.NullTime
 	err := s.db.QueryRow(`
-		SELECT id, app_id, status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
+		SELECT id, app_id, COALESCE(triggered_by,''), status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
 		FROM runs WHERE id = ?
-	`, id).Scan(&r.ID, &r.AppID, &r.Status, &r.CommitSHA, &r.Log, &r.StartedAt, &endedAt)
+	`, id).Scan(&r.ID, &r.AppID, &r.TriggeredBy, &r.Status, &r.CommitSHA, &r.Log, &r.StartedAt, &endedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -239,12 +244,12 @@ func (s *Store) ListRuns(appID string, limit, offset int) ([]Run, error) {
 	var err error
 	if appID != "" {
 		rows, err = s.db.Query(`
-			SELECT id, app_id, status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
+			SELECT id, app_id, COALESCE(triggered_by,''), status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
 			FROM runs WHERE app_id = ? ORDER BY started_at DESC LIMIT ? OFFSET ?
 		`, appID, limit, offset)
 	} else {
 		rows, err = s.db.Query(`
-			SELECT id, app_id, status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
+			SELECT id, app_id, COALESCE(triggered_by,''), status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
 			FROM runs ORDER BY started_at DESC LIMIT ? OFFSET ?
 		`, limit, offset)
 	}
@@ -256,7 +261,7 @@ func (s *Store) ListRuns(appID string, limit, offset int) ([]Run, error) {
 	for rows.Next() {
 		var r Run
 		var endedAt sql.NullTime
-		if err := rows.Scan(&r.ID, &r.AppID, &r.Status, &r.CommitSHA, &r.Log, &r.StartedAt, &endedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.AppID, &r.TriggeredBy, &r.Status, &r.CommitSHA, &r.Log, &r.StartedAt, &endedAt); err != nil {
 			return nil, err
 		}
 		if endedAt.Valid {
@@ -302,7 +307,7 @@ func (s *Store) ListRunsByAppIDs(appIDs []string, limit, offset int) ([]Run, err
 	}
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
-		SELECT id, app_id, status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
+		SELECT id, app_id, COALESCE(triggered_by,''), status, COALESCE(commit_sha,''), COALESCE(log,''), started_at, ended_at
 		FROM runs WHERE app_id IN (%s) ORDER BY started_at DESC LIMIT ? OFFSET ?
 	`, placeholders)
 	rows, err := s.db.Query(query, args...)
@@ -314,7 +319,7 @@ func (s *Store) ListRunsByAppIDs(appIDs []string, limit, offset int) ([]Run, err
 	for rows.Next() {
 		var r Run
 		var endedAt sql.NullTime
-		if err := rows.Scan(&r.ID, &r.AppID, &r.Status, &r.CommitSHA, &r.Log, &r.StartedAt, &endedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.AppID, &r.TriggeredBy, &r.Status, &r.CommitSHA, &r.Log, &r.StartedAt, &endedAt); err != nil {
 			return nil, err
 		}
 		if endedAt.Valid {

@@ -406,6 +406,7 @@ function renderRuns(container, runs, total, page) {
           <th class="run-expand-col"></th>
           <th>ID</th>
           <th>App</th>
+          <th>By</th>
           <th>Status</th>
           <th>Started</th>
           <th>Duration</th>
@@ -419,12 +420,13 @@ function renderRuns(container, runs, total, page) {
             </td>
             <td class="run-id">#${run.id}</td>
             <td>${escapeHtml(run.app_id)}</td>
+            <td>${escapeHtml(run.triggered_by || '—')}</td>
             <td><span class="badge ${statusClass(run.status)}">${escapeHtml(run.status)}</span></td>
             <td>${formatDate(run.started_at)}</td>
             <td>${formatDuration(run)}</td>
           </tr>
           <tr class="run-log-row" id="run-log-${run.id}" data-run-id="${run.id}" hidden>
-            <td colspan="6">
+            <td colspan="7">
               <div class="run-log-inline">
                 <pre class="run-log-inline-content">${escapeHtml(run.log || '(no log yet)')}</pre>
               </div>
