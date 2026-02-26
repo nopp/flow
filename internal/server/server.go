@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -24,6 +25,10 @@ import (
 )
 
 const sessionCookieName = "piaflow_session"
+const (
+	sessionTTLSeconds      = 30 * 60 // 30 minutes
+	sessionRotateThreshold = 10 * time.Minute
+)
 
 type contextKey string
 
@@ -33,6 +38,11 @@ type authUser struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 	IsAdmin  bool   `json:"is_admin"`
+}
+
+type sessionData struct {
+	User      authUser
+	ExpiresAt time.Time
 }
 
 // Server holds app data, store, runner and session state.
@@ -45,7 +55,7 @@ type Server struct {
 	staticDir string
 
 	sessionsMu sync.RWMutex
-	sessions   map[string]authUser
+	sessions   map[string]sessionData
 }
 
 // New builds a Server with the given apps slice, store, runner, and paths.
@@ -56,7 +66,7 @@ func New(apps []config.App, st *store.Store, runner *pipeline.Runner, appsPath, 
 		runner:    runner,
 		appsPath:  appsPath,
 		staticDir: staticDir,
-		sessions:  make(map[string]authUser),
+		sessions:  make(map[string]sessionData),
 	}
 }
 
@@ -104,7 +114,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u, ok := s.readSessionUser(r)
+		u, _, ok := s.authenticateSession(w, r, true)
 		if !ok {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 			return
@@ -175,24 +185,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 		return
 	}
-	token, err := randomToken()
-	if err != nil {
+	sessionUser := authUser{ID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin}
+	if err := s.createSession(w, sessionUser); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
 		return
 	}
-	sessionUser := authUser{ID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin}
-	s.sessionsMu.Lock()
-	s.sessions[token] = sessionUser
-	s.sessionsMu.Unlock()
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400 * 7,
-	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"user": sessionUser})
 }
 
@@ -215,7 +212,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	u, ok := s.readSessionUser(r)
+	u, _, ok := s.authenticateSession(w, r, true)
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 		return
@@ -259,6 +256,12 @@ func (s *Server) changeMyPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.UpdateUserPassword(user.ID, hash); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	// Invalidate all existing sessions for this user, then create a fresh session.
+	s.invalidateUserSessions(user.ID)
+	if err := s.createSession(w, user); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to refresh session"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"password_updated": true})
@@ -1063,15 +1066,43 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, run)
 }
 
-func (s *Server) readSessionUser(r *http.Request) (authUser, bool) {
+func (s *Server) readSessionUser(r *http.Request) (authUser, string, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
-		return authUser{}, false
+		return authUser{}, "", false
 	}
+	token := cookie.Value
+	now := time.Now()
 	s.sessionsMu.RLock()
-	u, ok := s.sessions[cookie.Value]
+	session, ok := s.sessions[token]
 	s.sessionsMu.RUnlock()
-	return u, ok
+	if !ok {
+		return authUser{}, "", false
+	}
+	if !session.ExpiresAt.After(now) {
+		s.invalidateSession(token)
+		return authUser{}, "", false
+	}
+	return session.User, token, true
+}
+
+func (s *Server) authenticateSession(w http.ResponseWriter, r *http.Request, rotate bool) (authUser, string, bool) {
+	u, token, ok := s.readSessionUser(r)
+	if !ok {
+		return authUser{}, "", false
+	}
+	if rotate {
+		s.sessionsMu.RLock()
+		session := s.sessions[token]
+		s.sessionsMu.RUnlock()
+		if time.Until(session.ExpiresAt) <= sessionRotateThreshold {
+			s.invalidateSession(token)
+			if err := s.createSession(w, u); err != nil {
+				return authUser{}, "", false
+			}
+		}
+	}
+	return u, token, true
 }
 
 func (s *Server) allowedAppIDsForUser(userID int64) (map[string]struct{}, []string, error) {
@@ -1120,6 +1151,45 @@ func randomToken() (string, error) {
 
 func storeErrNoRows(err error) bool {
 	return errors.Is(err, sql.ErrNoRows)
+}
+
+func (s *Server) createSession(w http.ResponseWriter, user authUser) error {
+	token, err := randomToken()
+	if err != nil {
+		return err
+	}
+	exp := time.Now().Add(time.Duration(sessionTTLSeconds) * time.Second)
+	s.sessionsMu.Lock()
+	s.sessions[token] = sessionData{User: user, ExpiresAt: exp}
+	s.sessionsMu.Unlock()
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   sessionTTLSeconds,
+	})
+	return nil
+}
+
+func (s *Server) invalidateSession(token string) {
+	if strings.TrimSpace(token) == "" {
+		return
+	}
+	s.sessionsMu.Lock()
+	delete(s.sessions, token)
+	s.sessionsMu.Unlock()
+}
+
+func (s *Server) invalidateUserSessions(userID int64) {
+	s.sessionsMu.Lock()
+	defer s.sessionsMu.Unlock()
+	for token, session := range s.sessions {
+		if session.User.ID == userID {
+			delete(s.sessions, token)
+		}
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
