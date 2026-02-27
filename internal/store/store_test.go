@@ -148,3 +148,47 @@ func TestStore_DeleteRunsByAppID(t *testing.T) {
 		t.Fatalf("expected 1 run for app2, got %d", count2)
 	}
 }
+
+func TestStore_SSHKeysCRUD(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ssh-keys.db")
+	st, err := New("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	id, err := st.CreateSSHKey("github-main", "private-key-content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id <= 0 {
+		t.Fatalf("expected positive ssh key id, got %d", id)
+	}
+
+	keys, err := st.ListSSHKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 1 || keys[0].Name != "github-main" {
+		t.Fatalf("unexpected keys list: %+v", keys)
+	}
+
+	byName, err := st.GetSSHKeyByName("github-main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byName == nil || byName.PrivateKey != "private-key-content" {
+		t.Fatalf("unexpected key by name: %+v", byName)
+	}
+
+	if err := st.DeleteSSHKey(id); err != nil {
+		t.Fatal(err)
+	}
+	byID, err := st.GetSSHKey(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byID != nil {
+		t.Fatalf("expected nil key after delete, got %+v", byID)
+	}
+}

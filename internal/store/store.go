@@ -40,6 +40,14 @@ type Group struct {
 	Name string `json:"name"`
 }
 
+// SSHKey represents a stored SSH private key used for git clone/pull.
+type SSHKey struct {
+	ID         int64     `json:"id"`
+	Name       string    `json:"name"`
+	PrivateKey string    `json:"-"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 // Store holds the DB connection and is the single entry point for all DB operations.
 type Store struct {
 	db     *sql.DB
@@ -134,6 +142,17 @@ func migrate(db *sql.DB, driver string) error {
 		if err != nil {
 			return err
 		}
+		_, err = db.Exec(`
+			CREATE TABLE IF NOT EXISTS ssh_keys (
+				id BIGINT AUTO_INCREMENT PRIMARY KEY,
+				name VARCHAR(255) NOT NULL UNIQUE,
+				private_key TEXT NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			);
+		`)
+		if err != nil {
+			return err
+		}
 		_, err = db.Exec(`CREATE INDEX idx_runs_app_id ON runs(app_id)`)
 		if err != nil {
 			// ignore if exists
@@ -177,12 +196,90 @@ func migrate(db *sql.DB, driver string) error {
 			group_id INTEGER NOT NULL,
 			PRIMARY KEY (app_id, group_id)
 		);
+		CREATE TABLE IF NOT EXISTS ssh_keys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL UNIQUE,
+			private_key TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	if err == nil {
 		_, _ = db.Exec(`ALTER TABLE runs ADD COLUMN triggered_by TEXT`)
 		_, _ = db.Exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0`)
 	}
 	return err
+}
+
+// CreateSSHKey inserts an SSH key and returns the generated ID.
+func (s *Store) CreateSSHKey(name, privateKey string) (int64, error) {
+	res, err := s.db.Exec(`INSERT INTO ssh_keys (name, private_key) VALUES (?, ?)`, name, privateKey)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// ListSSHKeys returns SSH keys without exposing private key material.
+func (s *Store) ListSSHKeys() ([]SSHKey, error) {
+	rows, err := s.db.Query(`SELECT id, name, created_at FROM ssh_keys ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	keys := make([]SSHKey, 0)
+	for rows.Next() {
+		var k SSHKey
+		if err := rows.Scan(&k.ID, &k.Name, &k.CreatedAt); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+// GetSSHKey returns an SSH key by ID (including private key).
+func (s *Store) GetSSHKey(id int64) (*SSHKey, error) {
+	var k SSHKey
+	err := s.db.QueryRow(`SELECT id, name, private_key, created_at FROM ssh_keys WHERE id = ?`, id).
+		Scan(&k.ID, &k.Name, &k.PrivateKey, &k.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
+// GetSSHKeyByName returns an SSH key by name (including private key).
+func (s *Store) GetSSHKeyByName(name string) (*SSHKey, error) {
+	var k SSHKey
+	err := s.db.QueryRow(`SELECT id, name, private_key, created_at FROM ssh_keys WHERE name = ?`, name).
+		Scan(&k.ID, &k.Name, &k.PrivateKey, &k.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
+// DeleteSSHKey deletes one SSH key by ID.
+func (s *Store) DeleteSSHKey(id int64) error {
+	res, err := s.db.Exec(`DELETE FROM ssh_keys WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // CreateRun inserts a new run and returns its ID.

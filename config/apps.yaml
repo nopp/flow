@@ -3,6 +3,7 @@ apps:
       name: app-teste
       repo: https://github.com/nopp/app-teste.git
       branch: main
+      ssh_key_name: ghub-dev-apps
       steps:
         - name: test
           cmd: go test ./...

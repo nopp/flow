@@ -122,15 +122,19 @@ func TestServer_NonAdminGroupAppAccessAndEdit(t *testing.T) {
 }
 
 func TestServer_CreateAndGetAppWithDynamicSteps(t *testing.T) {
-	h, _, _, _ := setupTestServer(t, []config.App{
+	h, st, _, _ := setupTestServer(t, []config.App{
 		{ID: "seed", Name: "Seed", Repo: "https://example.com/seed.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},
 	})
 	adminCookie := loginAndCookie(t, h, "admin", "admin")
+	if _, err := st.CreateSSHKey("key-main", "dummy-private-key"); err != nil {
+		t.Fatal(err)
+	}
 
 	createBody := map[string]interface{}{
-		"name":   "App Dynamic",
-		"repo":   "https://example.com/dyn.git",
-		"branch": "main",
+		"name":         "App Dynamic",
+		"repo":         "https://example.com/dyn.git",
+		"branch":       "main",
+		"ssh_key_name": "key-main",
 		"steps": []map[string]interface{}{
 			{"name": "lint", "cmd": "echo lint", "sleep_sec": 1},
 			{"name": "build", "cmd": "echo build"},
@@ -171,6 +175,9 @@ func TestServer_CreateAndGetAppWithDynamicSteps(t *testing.T) {
 	}
 	if len(steps) != 2 {
 		t.Fatalf("expected 2 steps in app response, got %d", len(steps))
+	}
+	if got["ssh_key_name"] != "key-main" {
+		t.Fatalf("expected ssh_key_name key-main, got %+v", got["ssh_key_name"])
 	}
 }
 

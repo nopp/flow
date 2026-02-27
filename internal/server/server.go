@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -86,6 +87,9 @@ func (s *Server) Handler() http.Handler {
 			r.Use(s.requireAuth)
 			r.Put("/auth/password", s.changeMyPassword)
 			r.Get("/auth/profile", s.profile)
+			r.Get("/ssh-keys", s.listSSHKeys)
+			r.Post("/ssh-keys", s.createSSHKey)
+			r.Delete("/ssh-keys/{keyID}", s.deleteSSHKey)
 			r.Get("/users", s.listUsers)
 			r.Post("/users", s.createUser)
 			r.Put("/users/{userID}/groups", s.setUserGroups)
@@ -398,8 +402,9 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		if a.ID == appID {
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"id": a.ID, "name": a.Name, "repo": a.Repo, "branch": a.Branch,
-				"steps":    a.EffectiveSteps(),
-				"test_cmd": a.TestCmd, "build_cmd": a.BuildCmd, "deploy_cmd": a.DeployCmd,
+				"ssh_key_name": a.SSHKeyName,
+				"steps":        a.EffectiveSteps(),
+				"test_cmd":     a.TestCmd, "build_cmd": a.BuildCmd, "deploy_cmd": a.DeployCmd,
 				"test_sleep_sec": a.TestSleepSec, "build_sleep_sec": a.BuildSleepSec, "deploy_sleep_sec": a.DeploySleepSec,
 			})
 			return
@@ -424,7 +429,7 @@ func (s *Server) createApp(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and repo are required"})
 		return
 	}
-	if err := validateAndNormalizeApp(&app); err != nil {
+	if err := s.validateAndNormalizeApp(&app, true); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -469,7 +474,17 @@ func (s *Server) updateApp(w http.ResponseWriter, r *http.Request) {
 	}
 	app := body.App
 	app.ID = appID
-	if err := validateAndNormalizeApp(&app); err != nil {
+	s.appsMu.RLock()
+	for i := range s.apps {
+		if s.apps[i].ID == appID {
+			if strings.TrimSpace(app.SSHKeyName) == "" {
+				app.SSHKeyName = s.apps[i].SSHKeyName
+			}
+			break
+		}
+	}
+	s.appsMu.RUnlock()
+	if err := s.validateAndNormalizeApp(&app, false); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -522,7 +537,20 @@ func generateAppID() (string, error) {
 	return "app-" + hex.EncodeToString(buf), nil
 }
 
-func validateAndNormalizeApp(app *config.App) error {
+func (s *Server) validateAndNormalizeApp(app *config.App, requireSSHKey bool) error {
+	app.SSHKeyName = strings.TrimSpace(app.SSHKeyName)
+	if requireSSHKey && app.SSHKeyName == "" {
+		return errors.New("ssh_key_name is required")
+	}
+	if app.SSHKeyName != "" {
+		key, err := s.store.GetSSHKeyByName(app.SSHKeyName)
+		if err != nil {
+			return err
+		}
+		if key == nil {
+			return errors.New("ssh_key_name not found")
+		}
+	}
 	if app.Branch == "" {
 		app.Branch = "main"
 	}
@@ -596,6 +624,19 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "app not found"})
 		return
 	}
+	if strings.TrimSpace(app.SSHKeyName) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "app has no ssh_key_name configured"})
+		return
+	}
+	key, err := s.store.GetSSHKeyByName(app.SSHKeyName)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if key == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "configured ssh_key_name not found"})
+		return
+	}
 
 	runID, err := s.store.CreateRun(appID, "", user.Username)
 	if err != nil {
@@ -604,10 +645,17 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	appCopy := *app
+	keyPath, cleanupKey, err := writeTempSSHKey(key.PrivateKey)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare ssh key"})
+		return
+	}
 	go func() {
+		defer cleanupKey()
 		_ = s.store.UpdateRunStatus(runID, "running", "")
 		onLogUpdate := func(log string) { _ = s.store.UpdateRunLog(runID, log) }
-		result := s.runner.Run(appCopy, onLogUpdate)
+		gitSSHCommand := buildGitSSHCommand(keyPath)
+		result := s.runner.Run(appCopy, pipeline.RunOptions{GitSSHCommand: gitSSHCommand}, onLogUpdate)
 		status := "success"
 		if !result.Success {
 			status = "failed"
@@ -616,6 +664,99 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"run_id": runID, "status": "pending"})
+}
+
+func buildGitSSHCommand(keyPath string) string {
+	return fmt.Sprintf("ssh -i %q -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new", keyPath)
+}
+
+func writeTempSSHKey(privateKey string) (string, func(), error) {
+	dir, err := os.MkdirTemp("", "piaflow-sshkey-*")
+	if err != nil {
+		return "", func() {}, err
+	}
+	keyPath := filepath.Join(dir, "id_key")
+	if err := os.WriteFile(keyPath, []byte(privateKey), 0600); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", func() {}, err
+	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
+	return keyPath, cleanup, nil
+}
+
+func (s *Server) listSSHKeys(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	keys, err := s.store.ListSSHKeys()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, keys)
+}
+
+func (s *Server) createSSHKey(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	var body struct {
+		Name       string `json:"name"`
+		PrivateKey string `json:"private_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	privateKey := strings.TrimSpace(body.PrivateKey)
+	if name == "" || privateKey == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and private_key are required"})
+		return
+	}
+	id, err := s.store.CreateSSHKey(name, privateKey)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]interface{}{"id": id, "name": name})
+}
+
+func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	keyID, err := strconv.ParseInt(chi.URLParam(r, "keyID"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid key id"})
+		return
+	}
+	key, err := s.store.GetSSHKey(keyID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if key == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "ssh key not found"})
+		return
+	}
+	s.appsMu.RLock()
+	for _, app := range s.apps {
+		if app.SSHKeyName == key.Name {
+			s.appsMu.RUnlock()
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ssh key is in use by an app"})
+			return
+		}
+	}
+	s.appsMu.RUnlock()
+	if err := s.store.DeleteSSHKey(keyID); storeErrNoRows(err) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "ssh key not found"})
+		return
+	} else if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {

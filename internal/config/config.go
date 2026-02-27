@@ -27,6 +27,7 @@ type App struct {
 	Name           string `yaml:"name" json:"name"`
 	Repo           string `yaml:"repo" json:"repo"`
 	Branch         string `yaml:"branch" json:"branch"`
+	SSHKeyName     string `yaml:"ssh_key_name,omitempty" json:"ssh_key_name,omitempty"`
 	Steps          []Step `yaml:"steps,omitempty" json:"steps,omitempty"`
 	BuildCmd       string `yaml:"build_cmd,omitempty" json:"build_cmd,omitempty"`
 	TestCmd        string `yaml:"test_cmd,omitempty" json:"test_cmd,omitempty"`

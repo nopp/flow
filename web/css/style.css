@@ -563,6 +563,13 @@ body {
   cursor: not-allowed;
 }
 
+.textarea-input {
+  min-height: 140px;
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
 .form-sleep-row {
   display: flex;
   align-items: center;

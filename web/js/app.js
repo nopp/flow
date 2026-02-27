@@ -278,6 +278,38 @@ async function setAppGroups(appId, groupIds) {
   return res.json();
 }
 
+async function getSSHKeys() {
+  const res = await fetchApi('/ssh-keys');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to load SSH keys');
+  }
+  return res.json();
+}
+
+async function createSSHKey(name, privateKey) {
+  const res = await fetchApi('/ssh-keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, private_key: privateKey }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to create SSH key');
+  }
+  return res.json();
+}
+
+async function deleteSSHKeyById(keyId) {
+  const res = await fetchApi(`/ssh-keys/${encodeURIComponent(String(keyId))}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to delete SSH key');
+  }
+}
+
 function showToast(message, type = 'success') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
@@ -640,6 +672,7 @@ const appFormOverlay = document.getElementById('app-form-overlay');
 const appForm = document.getElementById('app-form');
 const appFormTitle = document.getElementById('app-form-title');
 const appStepsContainer = document.getElementById('app-steps');
+let appSSHKeysCache = [];
 
 function clampStepSleepSec(value) {
   const n = parseInt(String(value || '').trim(), 10);
@@ -739,6 +772,29 @@ function collectAppStepsFromForm() {
   return steps;
 }
 
+function renderSSHKeyOptions(selectedName, isAdminEditing) {
+  const select = document.getElementById('app-ssh-key');
+  if (!select) return;
+  const selected = (selectedName || '').trim();
+  if (isAdminEditing) {
+    const options = appSSHKeysCache.map(k => `<option value="${escapeHtml(k.name)}" ${k.name === selected ? 'selected' : ''}>${escapeHtml(k.name)}</option>`);
+    select.innerHTML = `<option value="">Select an SSH key</option>${options.join('')}`;
+    select.disabled = false;
+    select.required = true;
+    if (!selected && appSSHKeysCache.length === 1) {
+      select.value = appSSHKeysCache[0].name;
+    }
+    return;
+  }
+  const value = selected || '';
+  select.innerHTML = value
+    ? `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`
+    : `<option value="">No SSH key configured</option>`;
+  select.value = value;
+  select.disabled = true;
+  select.required = false;
+}
+
 async function openAppForm(appId) {
   const overlay = document.getElementById('app-form-overlay');
   const form = document.getElementById('app-form');
@@ -751,9 +807,13 @@ async function openAppForm(appId) {
     if (titleEl) titleEl.textContent = 'Edit app';
     try {
       const app = await getApp(appId);
+      if (currentUser && currentUser.is_admin) {
+        appSSHKeysCache = await getSSHKeys();
+      }
       document.getElementById('app-name').value = app.name || '';
       document.getElementById('app-repo').value = app.repo || '';
       document.getElementById('app-branch').value = app.branch || 'main';
+      renderSSHKeyOptions(app.ssh_key_name || '', !!(currentUser && currentUser.is_admin));
       setAppStepsInForm(getEffectiveStepsForForm(app));
     } catch (_) {
       showToast('Failed to load app', 'error');
@@ -762,6 +822,16 @@ async function openAppForm(appId) {
     if (titleEl) titleEl.textContent = 'Add app';
     form.reset();
     document.getElementById('app-branch').value = 'main';
+    try {
+      appSSHKeysCache = await getSSHKeys();
+      renderSSHKeyOptions('', true);
+      if (!appSSHKeysCache.length) {
+        showToast('Create at least one SSH key in Access before creating an app.', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to load SSH keys', 'error');
+      renderSSHKeyOptions('', true);
+    }
     setAppStepsInForm([]);
   }
 }
@@ -791,8 +861,13 @@ if (appForm) {
       name: document.getElementById('app-name').value.trim(),
       repo: document.getElementById('app-repo').value.trim(),
       branch: document.getElementById('app-branch').value.trim() || 'main',
+      ssh_key_name: (document.getElementById('app-ssh-key') || {}).value || '',
       steps,
     };
+    if (!app.ssh_key_name.trim() && (!editId || (currentUser && currentUser.is_admin))) {
+      showToast('SSH key is required.', 'error');
+      return;
+    }
     try {
       if (editId) {
         await updateApp(editId, app);
@@ -884,7 +959,7 @@ function renderGroupSelector(container, groups, checkedIDs = []) {
   if (!container) return;
   const checked = new Set(checkedIDs);
   if (!groups.length) {
-    container.innerHTML = '<p class="empty-state compact">Crie um grupo primeiro.</p>';
+    container.innerHTML = '<p class="empty-state compact">Create a group first.</p>';
     return;
   }
   container.innerHTML = groups.map(group => `
@@ -899,7 +974,7 @@ function renderGroupsList(groups) {
   const container = document.getElementById('groups-container');
   if (!container) return;
   if (!groups.length) {
-    container.innerHTML = '<p class="empty-state compact">Nenhum grupo cadastrado.</p>';
+    container.innerHTML = '<p class="empty-state compact">No groups created yet.</p>';
     return;
   }
   container.innerHTML = groups.map(g => `
@@ -915,7 +990,7 @@ function renderUsersList(users, groups) {
   if (!container) return;
   const groupNameByID = new Map((groups || []).map(g => [g.id, g.name]));
   if (!users.length) {
-    container.innerHTML = '<p class="empty-state compact">Nenhum usuário cadastrado.</p>';
+    container.innerHTML = '<p class="empty-state compact">No users created yet.</p>';
     return;
   }
   container.innerHTML = users.map(user => {
@@ -929,11 +1004,11 @@ function renderUsersList(users, groups) {
           <strong>${escapeHtml(user.username)}</strong>
           <span class="muted-mono">#${user.id}</span>
         </div>
-        <div class="pill-row">${tags || '<span class="muted">Sem grupos</span>'}</div>
+        <div class="pill-row">${tags || '<span class="muted">No groups</span>'}</div>
         <div class="inline-actions">
-          <button type="button" class="btn btn-ghost btn-sm edit-user-groups-btn" data-user-id="${user.id}">Editar grupos</button>
-          <button type="button" class="btn btn-ghost btn-sm edit-user-password-btn" data-user-id="${user.id}">Alterar senha</button>
-          ${user.is_admin ? '' : `<button type="button" class="btn btn-ghost btn-sm delete-user-btn" data-user-id="${user.id}" ${currentUser && Number(currentUser.id) === Number(user.id) ? 'disabled' : ''}>Excluir</button>`}
+          <button type="button" class="btn btn-ghost btn-sm edit-user-groups-btn" data-user-id="${user.id}">Edit groups</button>
+          <button type="button" class="btn btn-ghost btn-sm edit-user-password-btn" data-user-id="${user.id}">Change password</button>
+          ${user.is_admin ? '' : `<button type="button" class="btn btn-ghost btn-sm delete-user-btn" data-user-id="${user.id}" ${currentUser && Number(currentUser.id) === Number(user.id) ? 'disabled' : ''}>Delete</button>`}
         </div>
       </article>
     `;
@@ -944,11 +1019,11 @@ function renderAppPermissions(apps, groups, appGroupMap) {
   const container = document.getElementById('app-permissions-container');
   if (!container) return;
   if (!apps.length) {
-    container.innerHTML = '<p class="empty-state">Nenhum app cadastrado.</p>';
+    container.innerHTML = '<p class="empty-state">No apps created yet.</p>';
     return;
   }
   if (!groups.length) {
-    container.innerHTML = '<p class="empty-state">Crie grupos para configurar permissões por app.</p>';
+    container.innerHTML = '<p class="empty-state">Create groups to configure app permissions.</p>';
     return;
   }
   container.innerHTML = apps.map(app => {
@@ -969,6 +1044,24 @@ function renderAppPermissions(apps, groups, appGroupMap) {
   }).join('');
 }
 
+function renderSSHKeysList(keys) {
+  const container = document.getElementById('ssh-keys-container');
+  if (!container) return;
+  if (!keys.length) {
+    container.innerHTML = '<p class="empty-state compact">No SSH keys created yet.</p>';
+    return;
+  }
+  container.innerHTML = keys.map(k => `
+    <article class="list-item">
+      <div class="list-item-head">
+        <strong>${escapeHtml(k.name)}</strong>
+        <span class="muted-mono">#${k.id}</span>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm delete-ssh-key-btn" data-key-id="${k.id}">Delete</button>
+    </article>
+  `).join('');
+}
+
 async function initAccessPage() {
   const groupsContainer = document.getElementById('groups-container');
   const usersContainer = document.getElementById('users-container');
@@ -978,6 +1071,7 @@ async function initAccessPage() {
   let groups = [];
   let users = [];
   let apps = [];
+  let sshKeys = [];
   const appGroupMap = new Map();
   let editingUserId = null;
 
@@ -985,6 +1079,7 @@ async function initAccessPage() {
     groups = await getGroups();
     users = await getUsers();
     apps = await getApps();
+    sshKeys = await getSSHKeys();
     const allAppGroups = await Promise.all(apps.map(app => getAppGroups(app.id)));
     appGroupMap.clear();
     for (const item of allAppGroups) {
@@ -994,6 +1089,7 @@ async function initAccessPage() {
     renderUsersList(users, groups);
     renderGroupSelector(document.getElementById('user-group-selector'), groups, []);
     renderAppPermissions(apps, groups, appGroupMap);
+    renderSSHKeysList(sshKeys);
     bindAccessActions();
   }
 
@@ -1012,18 +1108,18 @@ async function initAccessPage() {
         const userId = Number(btn.dataset.userId);
         const user = users.find(u => Number(u.id) === userId);
         if (!user) return;
-        const password = prompt(`Nova senha para ${user.username}`);
+        const password = prompt(`New password for ${user.username}`);
         if (password == null) return;
         const trimmed = password.trim();
         if (!trimmed) {
-          showToast('Senha não pode ser vazia.', 'error');
+          showToast('Password cannot be empty.', 'error');
           return;
         }
         try {
           await updateUserPassword(userId, trimmed);
-          showToast('Senha atualizada.', 'success');
+          showToast('Password updated.', 'success');
         } catch (err) {
-          showToast(err.message || 'Falha ao atualizar senha', 'error');
+          showToast(err.message || 'Failed to update password', 'error');
         }
       });
     });
@@ -1033,13 +1129,13 @@ async function initAccessPage() {
         const userId = Number(btn.dataset.userId);
         const user = users.find(u => Number(u.id) === userId);
         if (!user) return;
-        if (!confirm(`Excluir usuário "${user.username}"?`)) return;
+        if (!confirm(`Delete user "${user.username}"?`)) return;
         try {
           await deleteUserById(userId);
-          showToast('Usuário excluído.', 'success');
+          showToast('User deleted.', 'success');
           await reloadAll();
         } catch (err) {
-          showToast(err.message || 'Falha ao excluir usuário', 'error');
+          showToast(err.message || 'Failed to delete user', 'error');
         }
       });
     });
@@ -1054,13 +1150,29 @@ async function initAccessPage() {
         try {
           await setAppGroups(appId, selectedIDs);
           appGroupMap.set(appId, selectedIDs);
-          showToast(`Permissões do app "${appId}" atualizadas.`, 'success');
+          showToast(`Permissions for app "${appId}" updated.`, 'success');
         } catch (err) {
-          showToast(err.message || 'Falha ao atualizar permissões', 'error');
+          showToast(err.message || 'Failed to update permissions', 'error');
           await reloadAll();
           return;
         } finally {
           allInputs.forEach(el => { el.disabled = false; });
+        }
+      });
+    });
+
+    document.querySelectorAll('.delete-ssh-key-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const keyId = Number(btn.dataset.keyId);
+        const key = sshKeys.find(k => Number(k.id) === keyId);
+        const label = key ? key.name : `#${keyId}`;
+        if (!confirm(`Delete SSH key "${label}"?`)) return;
+        try {
+          await deleteSSHKeyById(keyId);
+          showToast('SSH key deleted.', 'success');
+          await reloadAll();
+        } catch (err) {
+          showToast(err.message || 'Failed to delete SSH key', 'error');
         }
       });
     });
@@ -1072,7 +1184,7 @@ async function initAccessPage() {
     const selector = document.getElementById('user-groups-selector');
     if (!overlay || !selector) return;
     editingUserId = Number(user.id);
-    if (title) title.textContent = `Grupos de ${user.username}`;
+    if (title) title.textContent = `${user.username} groups`;
     renderGroupSelector(selector, groups, user.group_ids || []);
     overlay.setAttribute('aria-hidden', 'false');
   }
@@ -1093,10 +1205,10 @@ async function initAccessPage() {
       try {
         await createGroup(name);
         if (nameInput) nameInput.value = '';
-        showToast('Grupo criado.', 'success');
+        showToast('Group created.', 'success');
         await reloadAll();
       } catch (err) {
-        showToast(err.message || 'Falha ao criar grupo', 'error');
+        showToast(err.message || 'Failed to create group', 'error');
       }
     });
   }
@@ -1119,10 +1231,31 @@ async function initAccessPage() {
         if (passwordInput) passwordInput.value = '';
         if (isAdminInput) isAdminInput.checked = false;
         renderGroupSelector(document.getElementById('user-group-selector'), groups, []);
-        showToast('Usuário criado.', 'success');
+        showToast('User created.', 'success');
         await reloadAll();
       } catch (err) {
-        showToast(err.message || 'Falha ao criar usuário', 'error');
+        showToast(err.message || 'Failed to create user', 'error');
+      }
+    });
+  }
+
+  const sshKeyForm = document.getElementById('ssh-key-form');
+  if (sshKeyForm) {
+    sshKeyForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nameInput = document.getElementById('ssh-key-name');
+      const keyInput = document.getElementById('ssh-key-private');
+      const name = nameInput ? nameInput.value.trim() : '';
+      const privateKey = keyInput ? keyInput.value.trim() : '';
+      if (!name || !privateKey) return;
+      try {
+        await createSSHKey(name, privateKey);
+        if (nameInput) nameInput.value = '';
+        if (keyInput) keyInput.value = '';
+        showToast('SSH key created.', 'success');
+        await reloadAll();
+      } catch (err) {
+        showToast(err.message || 'Failed to create SSH key', 'error');
       }
     });
   }
@@ -1136,11 +1269,11 @@ async function initAccessPage() {
       userGroupsSave.disabled = true;
       try {
         await setUserGroups(editingUserId, groupIDs);
-        showToast('Grupos do usuário atualizados.', 'success');
+        showToast('User groups updated.', 'success');
         closeUserGroupsEditor();
         await reloadAll();
       } catch (err) {
-        showToast(err.message || 'Falha ao atualizar grupos', 'error');
+        showToast(err.message || 'Failed to update groups', 'error');
       } finally {
         userGroupsSave.disabled = false;
       }
@@ -1164,6 +1297,8 @@ async function initAccessPage() {
     groupsContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
     usersContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
     appPermissionsContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
+    const keysContainer = document.getElementById('ssh-keys-container');
+    if (keysContainer) keysContainer.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load access data')}</p>`;
   }
 }
 
@@ -1209,7 +1344,7 @@ async function initGroupPage() {
   const params = new URLSearchParams(window.location.search);
   const groupID = Number(params.get('group_id'));
   if (!Number.isInteger(groupID) || groupID <= 0) {
-    groupTitle.textContent = 'Grupo inválido';
+    groupTitle.textContent = 'Invalid group';
     return;
   }
 
@@ -1220,7 +1355,7 @@ async function initGroupPage() {
 
   async function reload() {
     const data = await getGroup(groupID);
-    groupTitle.textContent = `Grupo: ${data.name}`;
+    groupTitle.textContent = `Group: ${data.name}`;
     renderGroupUsersSelector(usersBox, data.available_users || [], data.user_ids || []);
     renderGroupAppsSelector(appsBox, data.available_apps || [], data.app_ids || []);
   }
@@ -1231,9 +1366,9 @@ async function initGroupPage() {
       saveUsersBtn.disabled = true;
       try {
         await setGroupUsers(groupID, userIDs);
-        showToast('Usuários do grupo atualizados.', 'success');
+        showToast('Group users updated.', 'success');
       } catch (err) {
-        showToast(err.message || 'Falha ao salvar usuários', 'error');
+        showToast(err.message || 'Failed to save users', 'error');
       } finally {
         saveUsersBtn.disabled = false;
       }
@@ -1246,9 +1381,9 @@ async function initGroupPage() {
       saveAppsBtn.disabled = true;
       try {
         await setGroupApps(groupID, appIDs);
-        showToast('Apps do grupo atualizados.', 'success');
+        showToast('Group apps updated.', 'success');
       } catch (err) {
-        showToast(err.message || 'Falha ao salvar apps', 'error');
+        showToast(err.message || 'Failed to save apps', 'error');
       } finally {
         saveAppsBtn.disabled = false;
       }
@@ -1258,7 +1393,7 @@ async function initGroupPage() {
   try {
     await reload();
   } catch (err) {
-    groupTitle.textContent = err.message || 'Falha ao carregar grupo';
+    groupTitle.textContent = err.message || 'Failed to load group';
   }
 }
 
@@ -1272,19 +1407,19 @@ async function initProfilePage() {
   try {
     const p = await getProfile();
     infoEl.innerHTML = `
-      <article class="list-item"><strong>Usuário</strong><span>${escapeHtml(p.username || '-')}</span></article>
-      <article class="list-item"><strong>Admin</strong><span>${p.is_admin ? 'Sim' : 'Não'}</span></article>
+      <article class="list-item"><strong>User</strong><span>${escapeHtml(p.username || '-')}</span></article>
+      <article class="list-item"><strong>Admin</strong><span>${p.is_admin ? 'Yes' : 'No'}</span></article>
     `;
 
     const groups = Array.isArray(p.groups) ? p.groups : [];
     groupsEl.innerHTML = groups.length
       ? groups.map(g => `<article class="list-item"><strong>${escapeHtml(g.name)}</strong><span class="muted-mono">#${g.id}</span></article>`).join('')
-      : '<p class="empty-state compact">Sem grupos.</p>';
+      : '<p class="empty-state compact">No groups.</p>';
 
     const apps = Array.isArray(p.apps) ? p.apps : [];
     appsEl.innerHTML = apps.length
       ? apps.map(a => `<article class="list-item list-item-column"><strong>${escapeHtml(a.name || a.id)}</strong><span class="muted-mono">${escapeHtml(a.id || '')}</span><span class="muted">${escapeHtml(a.repo || '')}</span></article>`).join('')
-      : '<p class="empty-state compact">Sem apps vinculados.</p>';
+      : '<p class="empty-state compact">No linked apps.</p>';
   } catch (err) {
     infoEl.innerHTML = `<p class="error-message">${escapeHtml(err.message || 'Failed to load profile')}</p>`;
     groupsEl.innerHTML = '';
@@ -1299,16 +1434,16 @@ async function initProfilePage() {
       const curr = currEl ? currEl.value.trim() : '';
       const next = nextEl ? nextEl.value.trim() : '';
       if (!curr || !next) {
-        showToast('Preencha senha atual e nova senha.', 'error');
+        showToast('Fill current password and new password.', 'error');
         return;
       }
       try {
         await changeMyPassword(curr, next);
         if (currEl) currEl.value = '';
         if (nextEl) nextEl.value = '';
-        showToast('Senha alterada com sucesso.', 'success');
+        showToast('Password changed successfully.', 'success');
       } catch (err) {
-        showToast(err.message || 'Falha ao alterar senha', 'error');
+        showToast(err.message || 'Failed to change password', 'error');
       }
     });
   }
@@ -1354,7 +1489,7 @@ async function initLoginPage() {
       window.location.href = '/';
     } catch (err) {
       if (errorEl) {
-        errorEl.textContent = err.message || 'Falha no login';
+        errorEl.textContent = err.message || 'Login failed';
         errorEl.hidden = false;
       }
     }

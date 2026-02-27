@@ -19,7 +19,7 @@
         </div>
         <nav class="header-nav">
           <a href="/" class="btn btn-ghost">Recent runs</a>
-          <a href="/access.html" class="btn btn-ghost">Acessos</a>
+          <a href="/access.html" class="btn btn-ghost">Access</a>
           <a href="/docs.html" class="btn btn-ghost" target="_blank" rel="noopener">Docs</a>
         </nav>
         <div class="header-actions">
@@ -61,6 +61,8 @@
         <input type="url" id="app-repo" name="repo" class="form-input" required placeholder="https://github.com/org/repo.git" />
         <label class="form-label">Branch</label>
         <input type="text" id="app-branch" name="branch" class="form-input" placeholder="main" value="main" />
+        <label class="form-label">SSH key <span class="form-hint">(used for git clone/pull)</span></label>
+        <select id="app-ssh-key" name="ssh_key_name" class="form-input" required></select>
         <div class="steps-header">
           <label class="form-label">Pipeline steps <span class="form-hint">(at least one command is required)</span></label>
           <button type="button" id="add-step-btn" class="btn btn-ghost">Add step</button>

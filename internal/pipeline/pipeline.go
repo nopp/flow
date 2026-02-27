@@ -32,15 +32,24 @@ type Result struct {
 	Log     string
 }
 
+// RunOptions configures runtime behavior for a pipeline run.
+type RunOptions struct {
+	GitSSHCommand string
+}
+
 // Run executes clone, test, build, and optionally deploy for the given app.
 // If onLogUpdate is non-nil, it is called with the current log after each step so the UI can stream it.
-func (r *Runner) Run(app config.App, onLogUpdate func(log string)) Result {
+func (r *Runner) Run(app config.App, opts RunOptions, onLogUpdate func(log string)) Result {
 	var log bytes.Buffer
 	appendLog := func(format string, args ...interface{}) {
 		log.WriteString(fmt.Sprintf(format+"\n", args...))
 		if onLogUpdate != nil {
 			onLogUpdate(log.String())
 		}
+	}
+	gitEnv := []string(nil)
+	if strings.TrimSpace(opts.GitSSHCommand) != "" {
+		gitEnv = append(os.Environ(), "GIT_SSH_COMMAND="+opts.GitSSHCommand)
 	}
 
 	appWorkDir := filepath.Join(r.workDir, app.ID)
@@ -55,18 +64,18 @@ func (r *Runner) Run(app config.App, onLogUpdate func(log string)) Result {
 			appendLog("mkdir app dir: %v", err)
 			return Result{Success: false, Log: log.String()}
 		}
-		if err := r.runCmd(appWorkDir, "git", "clone", "--branch", app.Branch, "--single-branch", app.Repo, "."); err != nil {
+		if err := r.runCmd(gitEnv, appWorkDir, "git", "clone", "--branch", app.Branch, "--single-branch", app.Repo, "."); err != nil {
 			appendLog("git clone: %v", err)
 			return Result{Success: false, Log: log.String()}
 		}
 	} else {
-		if err := r.runCmd(appWorkDir, "git", "pull", "origin", app.Branch); err != nil {
+		if err := r.runCmd(gitEnv, appWorkDir, "git", "pull", "origin", app.Branch); err != nil {
 			appendLog("git pull: %v", err)
 			return Result{Success: false, Log: log.String()}
 		}
 	}
 
-	commit, _ := r.output(appWorkDir, "git", "rev-parse", "HEAD")
+	commit, _ := r.output(gitEnv, appWorkDir, "git", "rev-parse", "HEAD")
 	appendLog("commit: %s", strings.TrimSpace(commit))
 
 	steps := app.EffectiveSteps()
@@ -94,9 +103,12 @@ func (r *Runner) Run(app config.App, onLogUpdate func(log string)) Result {
 }
 
 // runCmd runs a command in dir with stdout/stderr attached to the process (for git clone/pull).
-func (r *Runner) runCmd(dir, name string, args ...string) error {
+func (r *Runner) runCmd(env []string, dir, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = env
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -116,9 +128,12 @@ func (r *Runner) runCmdWithLog(dir, command string, log *bytes.Buffer) error {
 }
 
 // output runs a command in dir and returns its combined stdout.
-func (r *Runner) output(dir, name string, args ...string) (string, error) {
+func (r *Runner) output(env []string, dir, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = env
+	}
 	out, err := cmd.Output()
 	return string(out), err
 }
