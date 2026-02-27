@@ -189,3 +189,14 @@ When running `bin/cicd` or `go run ./cmd/cicd`:
 
 - [CODE.md](CODE.md) — package/file/function reference
 - `/docs.html` — architecture and API docs in the web UI
+
+## Screenshots
+
+### Home
+
+![NoppFlow Home](.img/home.png)
+
+### Admin
+
+![NoppFlow Admin 1](.img/admin1.png)
+![NoppFlow Admin 2](.img/admin2.png)
