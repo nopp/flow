@@ -670,7 +670,6 @@ async function loadRuns() {
 
 const appFormOverlay = document.getElementById('app-form-overlay');
 const appForm = document.getElementById('app-form');
-const appFormTitle = document.getElementById('app-form-title');
 const appStepsContainer = document.getElementById('app-steps');
 let appSSHKeysCache = [];
 
