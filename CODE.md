@@ -1,11 +1,11 @@
-# PiaFlow Code Reference
+# NoppFlow Code Reference
 
 This file documents the current code structure and main symbols.
 
 ## Repository Layout
 
 ```text
-piaflow/
+noppflow/
 ├── cmd/cicd/              # Application entrypoint
 ├── internal/
 │   ├── auth/              # Password hash/check helpers (bcrypt + legacy support)

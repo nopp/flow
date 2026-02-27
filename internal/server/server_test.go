@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"piaflow/internal/auth"
-	"piaflow/internal/config"
-	"piaflow/internal/pipeline"
-	"piaflow/internal/store"
+	"noppflow/internal/auth"
+	"noppflow/internal/config"
+	"noppflow/internal/pipeline"
+	"noppflow/internal/store"
 )
 
 func TestServer_AuthRequiredForAPI(t *testing.T) {

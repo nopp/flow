@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: piaflow
+  name: noppflow
   labels:
-    app: piaflow
+    app: noppflow
 spec:
   type: ClusterIP
   selector:
-    app: piaflow
+    app: noppflow
   ports:
     - name: http
       port: 80

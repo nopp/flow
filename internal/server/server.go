@@ -19,13 +19,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"piaflow/internal/auth"
-	"piaflow/internal/config"
-	"piaflow/internal/pipeline"
-	"piaflow/internal/store"
+	"noppflow/internal/auth"
+	"noppflow/internal/config"
+	"noppflow/internal/pipeline"
+	"noppflow/internal/store"
 )
 
-const sessionCookieName = "piaflow_session"
+const sessionCookieName = "noppflow_session"
 const (
 	sessionTTLSeconds      = 30 * 60 // 30 minutes
 	sessionRotateThreshold = 10 * time.Minute
@@ -671,7 +671,7 @@ func buildGitSSHCommand(keyPath string) string {
 }
 
 func writeTempSSHKey(privateKey string) (string, func(), error) {
-	dir, err := os.MkdirTemp("", "piaflow-sshkey-*")
+	dir, err := os.MkdirTemp("", "noppflow-sshkey-*")
 	if err != nil {
 		return "", func() {}, err
 	}

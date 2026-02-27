@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"piaflow/internal/config"
+	"noppflow/internal/config"
 )
 
 // Runner holds the base directory where app repositories are cloned (e.g. work/).

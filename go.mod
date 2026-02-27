@@ -1,4 +1,4 @@
-module piaflow
+module noppflow
 
 go 1.21.0
 

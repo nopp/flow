@@ -1,4 +1,4 @@
-# PiaFlow (Go)
+# NoppFlow (Go)
 
 Minimal CI/CD system in Go with app-level access control by groups.
 Supports SQLite (dev) and MySQL (prod).
@@ -67,7 +67,7 @@ Each step has:
 - `cmd`
 - optional `sleep_sec` (0..3600)
 
-Before steps, PiaFlow clones or pulls the app repository into `work/<app_id>/`.
+Before steps, NoppFlow clones or pulls the app repository into `work/<app_id>/`.
 Git clone/pull uses the app's configured SSH key (`ssh_key_name`).
 If any step fails, run status becomes `failed`.
 

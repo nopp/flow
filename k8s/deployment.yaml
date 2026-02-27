@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: piaflow
+  name: noppflow
   labels:
-    app: piaflow
+    app: noppflow
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: piaflow
+      app: noppflow
   template:
     metadata:
       labels:
-        app: piaflow
+        app: noppflow
     spec:
       containers:
-        - name: piaflow
-          image: piaflow:latest
+        - name: noppflow
+          image: noppflow:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -27,7 +27,7 @@ spec:
             - name: DB_DSN
               valueFrom:
                 secretKeyRef:
-                  name: piaflow-db
+                  name: noppflow-db
                   key: dsn
           resources:
             requests:
@@ -52,7 +52,7 @@ spec:
       # volumes:
       #   - name: config
       #     configMap:
-      #       name: piaflow-config
+      #       name: noppflow-config
       #   - name: work
       #     emptyDir: {}
       # volumeMounts in container:

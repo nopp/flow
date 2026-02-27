@@ -1,4 +1,4 @@
-// Command cicd is the entry point for the PiaFlow server.
+// Command cicd is the entry point for the NoppFlow server.
 // It loads apps from YAML, opens the store (SQLite or MySQL), and starts the HTTP server
 // that serves the web UI and the REST API for apps and runs.
 package main
@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"piaflow/internal/auth"
-	"piaflow/internal/config"
-	"piaflow/internal/pipeline"
-	"piaflow/internal/server"
-	"piaflow/internal/store"
+	"noppflow/internal/auth"
+	"noppflow/internal/config"
+	"noppflow/internal/pipeline"
+	"noppflow/internal/server"
+	"noppflow/internal/store"
 )
 
 func main() {
