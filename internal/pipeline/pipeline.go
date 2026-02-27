@@ -69,60 +69,20 @@ func (r *Runner) Run(app config.App, onLogUpdate func(log string)) Result {
 	commit, _ := r.output(appWorkDir, "git", "rev-parse", "HEAD")
 	appendLog("commit: %s", strings.TrimSpace(commit))
 
-	// Step 1: Test
-	if app.TestCmd != "" {
-		appendLog("=== Step: test ===")
-		if err := r.runCmdWithLog(appWorkDir, app.TestCmd, &log); err != nil {
+	steps := app.EffectiveSteps()
+	for _, step := range steps {
+		appendLog("=== Step: %s ===", step.Name)
+		if err := r.runCmdWithLog(appWorkDir, step.Cmd, &log); err != nil {
 			if onLogUpdate != nil {
 				onLogUpdate(log.String())
 			}
-			appendLog("test step failed: %v", err)
+			appendLog("%s step failed: %v", step.Name, err)
 			return Result{Success: false, Log: log.String()}
 		}
-		appendLog("test step OK")
-		if app.TestSleepSec > 0 {
-			appendLog("Sleeping %ds after test...", app.TestSleepSec)
-			time.Sleep(time.Duration(app.TestSleepSec) * time.Second)
-			if onLogUpdate != nil {
-				onLogUpdate(log.String())
-			}
-		}
-	}
-
-	// Step 2: Build
-	if app.BuildCmd != "" {
-		appendLog("=== Step: build ===")
-		if err := r.runCmdWithLog(appWorkDir, app.BuildCmd, &log); err != nil {
-			if onLogUpdate != nil {
-				onLogUpdate(log.String())
-			}
-			appendLog("build step failed: %v", err)
-			return Result{Success: false, Log: log.String()}
-		}
-		appendLog("build step OK")
-		if app.BuildSleepSec > 0 {
-			appendLog("Sleeping %ds after build...", app.BuildSleepSec)
-			time.Sleep(time.Duration(app.BuildSleepSec) * time.Second)
-			if onLogUpdate != nil {
-				onLogUpdate(log.String())
-			}
-		}
-	}
-
-	// Step 3: Deploy (optional)
-	if app.DeployCmd != "" {
-		appendLog("=== Step: deploy ===")
-		if err := r.runCmdWithLog(appWorkDir, app.DeployCmd, &log); err != nil {
-			if onLogUpdate != nil {
-				onLogUpdate(log.String())
-			}
-			appendLog("deploy step failed: %v", err)
-			return Result{Success: false, Log: log.String()}
-		}
-		appendLog("deploy step OK")
-		if app.DeploySleepSec > 0 {
-			appendLog("Sleeping %ds after deploy...", app.DeploySleepSec)
-			time.Sleep(time.Duration(app.DeploySleepSec) * time.Second)
+		appendLog("%s step OK", step.Name)
+		if step.SleepSec > 0 {
+			appendLog("Sleeping %ds after %s...", step.SleepSec, step.Name)
+			time.Sleep(time.Duration(step.SleepSec) * time.Second)
 			if onLogUpdate != nil {
 				onLogUpdate(log.String())
 			}

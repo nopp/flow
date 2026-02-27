@@ -590,6 +590,46 @@ body {
   width: 5rem;
 }
 
+.steps-header {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.steps-header .form-label {
+  margin: 0;
+}
+
+.steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.step-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: var(--bg);
+}
+
+.step-row-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.step-row-bottom {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 0.5rem;
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;

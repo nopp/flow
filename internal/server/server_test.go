@@ -121,6 +121,52 @@ func TestServer_NonAdminGroupAppAccessAndEdit(t *testing.T) {
 	}
 }
 
+func TestServer_CreateAndGetAppWithDynamicSteps(t *testing.T) {
+	h, _, _, _ := setupTestServer(t, []config.App{
+		{ID: "seed", Name: "Seed", Repo: "https://example.com/seed.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},
+	})
+	adminCookie := loginAndCookie(t, h, "admin", "admin")
+
+	createBody := map[string]interface{}{
+		"id":     "app-dyn",
+		"name":   "App Dynamic",
+		"repo":   "https://example.com/dyn.git",
+		"branch": "main",
+		"steps": []map[string]interface{}{
+			{"name": "lint", "cmd": "echo lint", "sleep_sec": 1},
+			{"name": "build", "cmd": "echo build"},
+		},
+	}
+	bodyBytes, _ := json.Marshal(createBody)
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/apps", bytes.NewReader(bodyBytes))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.AddCookie(adminCookie)
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating app with dynamic steps, got %d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/apps/app-dyn", nil)
+	reqGet.AddCookie(adminCookie)
+	recGet := httptest.NewRecorder()
+	h.ServeHTTP(recGet, reqGet)
+	if recGet.Code != http.StatusOK {
+		t.Fatalf("expected 200 getting app-dyn, got %d", recGet.Code)
+	}
+	var got map[string]interface{}
+	if err := json.NewDecoder(recGet.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	steps, ok := got["steps"].([]interface{})
+	if !ok {
+		t.Fatalf("expected steps field in app response, got %+v", got)
+	}
+	if len(steps) != 2 {
+		t.Fatalf("expected 2 steps in app response, got %d", len(steps))
+	}
+}
+
 func TestServer_ChangeOwnPassword(t *testing.T) {
 	h, st, _, _ := setupTestServer(t, []config.App{
 		{ID: "app-a", Name: "App A", Repo: "https://example.com/a.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},

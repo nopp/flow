@@ -63,24 +63,11 @@
         <input type="url" id="app-repo" name="repo" class="form-input" required placeholder="https://github.com/org/repo.git" />
         <label class="form-label">Branch</label>
         <input type="text" id="app-branch" name="branch" class="form-input" placeholder="main" value="main" />
-        <label class="form-label">Test command <span class="form-hint">(required)</span></label>
-        <input type="text" id="app-test-cmd" name="test_cmd" class="form-input" required placeholder="go test ./..." />
-        <div class="form-sleep-row">
-          <label class="form-checkbox-label"><input type="checkbox" id="app-test-sleep" name="test_sleep" /> Sleep after test (seconds)</label>
-          <input type="number" id="app-test-sleep-sec" name="test_sleep_sec" class="form-input form-input-narrow" min="1" max="3600" placeholder="0" disabled />
+        <div class="steps-header">
+          <label class="form-label">Pipeline steps <span class="form-hint">(at least one command is required)</span></label>
+          <button type="button" id="add-step-btn" class="btn btn-ghost">Add step</button>
         </div>
-        <label class="form-label">Build command <span class="form-hint">(required)</span></label>
-        <input type="text" id="app-build-cmd" name="build_cmd" class="form-input" required placeholder="go build -o bin/app ." />
-        <div class="form-sleep-row">
-          <label class="form-checkbox-label"><input type="checkbox" id="app-build-sleep" name="build_sleep" /> Sleep after build (seconds)</label>
-          <input type="number" id="app-build-sleep-sec" name="build_sleep_sec" class="form-input form-input-narrow" min="1" max="3600" placeholder="0" disabled />
-        </div>
-        <label class="form-label">Deploy command <span class="form-hint">(optional)</span></label>
-        <input type="text" id="app-deploy-cmd" name="deploy_cmd" class="form-input" placeholder="./scripts/deploy.sh" />
-        <div class="form-sleep-row">
-          <label class="form-checkbox-label"><input type="checkbox" id="app-deploy-sleep" name="deploy_sleep" /> Sleep after deploy (seconds)</label>
-          <input type="number" id="app-deploy-sleep-sec" name="deploy_sleep_sec" class="form-input form-input-narrow" min="1" max="3600" placeholder="0" disabled />
-        </div>
+        <div id="app-steps" class="steps-list"></div>
         <div class="form-actions">
           <button type="button" id="app-form-cancel" class="btn btn-ghost">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>

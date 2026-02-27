@@ -33,3 +33,48 @@ apps:
 		t.Errorf("unexpected app: %+v", apps[0])
 	}
 }
+
+func TestEffectiveStepsFromLegacyFields(t *testing.T) {
+	app := App{
+		ID:            "legacy",
+		TestCmd:       "go test ./...",
+		BuildCmd:      "go build ./...",
+		DeployCmd:     "./deploy.sh",
+		TestSleepSec:  2,
+		BuildSleepSec: 3,
+	}
+	steps := app.EffectiveSteps()
+	if len(steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(steps))
+	}
+	if steps[0].Name != "test" || steps[0].Cmd != "go test ./..." || steps[0].SleepSec != 2 {
+		t.Fatalf("unexpected test step: %+v", steps[0])
+	}
+	if steps[1].Name != "build" || steps[1].Cmd != "go build ./..." || steps[1].SleepSec != 3 {
+		t.Fatalf("unexpected build step: %+v", steps[1])
+	}
+	if steps[2].Name != "deploy" || steps[2].Cmd != "./deploy.sh" {
+		t.Fatalf("unexpected deploy step: %+v", steps[2])
+	}
+}
+
+func TestEffectiveStepsFromDynamicList(t *testing.T) {
+	app := App{
+		ID: "dynamic",
+		Steps: []Step{
+			{Name: "lint", Cmd: "go vet ./...", SleepSec: 1},
+			{Name: "", Cmd: "go test ./..."},
+			{Name: "empty", Cmd: "   "},
+		},
+	}
+	steps := app.EffectiveSteps()
+	if len(steps) != 2 {
+		t.Fatalf("expected 2 non-empty steps, got %d", len(steps))
+	}
+	if steps[0].Name != "lint" || steps[0].Cmd != "go vet ./..." || steps[0].SleepSec != 1 {
+		t.Fatalf("unexpected first step: %+v", steps[0])
+	}
+	if steps[1].Name != "step-2" || steps[1].Cmd != "go test ./..." {
+		t.Fatalf("unexpected second step: %+v", steps[1])
+	}
+}

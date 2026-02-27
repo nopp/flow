@@ -5,9 +5,17 @@ package config
 
 import (
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// Step defines one pipeline step.
+type Step struct {
+	Name     string `yaml:"name" json:"name"`
+	Cmd      string `yaml:"cmd" json:"cmd"`
+	SleepSec int    `yaml:"sleep_sec" json:"sleep_sec"`
+}
 
 // App defines a single application in the CI/CD system.
 // ID is unique and used in URLs and as the clone directory name under work/.
@@ -15,16 +23,17 @@ import (
 // TestCmd and BuildCmd are required; DeployCmd is optional.
 // TestSleepSec, BuildSleepSec, DeploySleepSec are optional: when > 0, the pipeline sleeps that many seconds after the corresponding step.
 type App struct {
-	ID            string `yaml:"id" json:"id"`
-	Name          string `yaml:"name" json:"name"`
-	Repo          string `yaml:"repo" json:"repo"`
-	Branch        string `yaml:"branch" json:"branch"`
-	BuildCmd      string `yaml:"build_cmd" json:"build_cmd"`
-	TestCmd       string `yaml:"test_cmd" json:"test_cmd"`
-	DeployCmd     string `yaml:"deploy_cmd" json:"deploy_cmd"`
-	TestSleepSec  int    `yaml:"test_sleep_sec" json:"test_sleep_sec"`
-	BuildSleepSec int    `yaml:"build_sleep_sec" json:"build_sleep_sec"`
-	DeploySleepSec int   `yaml:"deploy_sleep_sec" json:"deploy_sleep_sec"`
+	ID             string `yaml:"id" json:"id"`
+	Name           string `yaml:"name" json:"name"`
+	Repo           string `yaml:"repo" json:"repo"`
+	Branch         string `yaml:"branch" json:"branch"`
+	Steps          []Step `yaml:"steps,omitempty" json:"steps,omitempty"`
+	BuildCmd       string `yaml:"build_cmd,omitempty" json:"build_cmd,omitempty"`
+	TestCmd        string `yaml:"test_cmd,omitempty" json:"test_cmd,omitempty"`
+	DeployCmd      string `yaml:"deploy_cmd,omitempty" json:"deploy_cmd,omitempty"`
+	TestSleepSec   int    `yaml:"test_sleep_sec,omitempty" json:"test_sleep_sec,omitempty"`
+	BuildSleepSec  int    `yaml:"build_sleep_sec,omitempty" json:"build_sleep_sec,omitempty"`
+	DeploySleepSec int    `yaml:"deploy_sleep_sec,omitempty" json:"deploy_sleep_sec,omitempty"`
 }
 
 // AppsConfig is the root of apps.yaml.
@@ -55,4 +64,52 @@ func SaveApps(path string, apps []App) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+// EffectiveSteps returns app steps. If dynamic steps are not provided, it builds them from legacy fields.
+func (a App) EffectiveSteps() []Step {
+	if len(a.Steps) > 0 {
+		out := make([]Step, 0, len(a.Steps))
+		for i, s := range a.Steps {
+			name := strings.TrimSpace(s.Name)
+			if name == "" {
+				name = "step-" + strconvItoa(i+1)
+			}
+			cmd := strings.TrimSpace(s.Cmd)
+			if cmd == "" {
+				continue
+			}
+			out = append(out, Step{Name: name, Cmd: cmd, SleepSec: s.SleepSec})
+		}
+		return out
+	}
+	out := make([]Step, 0, 3)
+	if strings.TrimSpace(a.TestCmd) != "" {
+		out = append(out, Step{Name: "test", Cmd: strings.TrimSpace(a.TestCmd), SleepSec: a.TestSleepSec})
+	}
+	if strings.TrimSpace(a.BuildCmd) != "" {
+		out = append(out, Step{Name: "build", Cmd: strings.TrimSpace(a.BuildCmd), SleepSec: a.BuildSleepSec})
+	}
+	if strings.TrimSpace(a.DeployCmd) != "" {
+		out = append(out, Step{Name: "deploy", Cmd: strings.TrimSpace(a.DeployCmd), SleepSec: a.DeploySleepSec})
+	}
+	return out
+}
+
+// NormalizeAppSteps writes effective steps back to app.Steps.
+func NormalizeAppSteps(app App) App {
+	app.Steps = app.EffectiveSteps()
+	return app
+}
+
+func strconvItoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	digits := []byte{}
+	for n > 0 {
+		digits = append([]byte{byte('0' + (n % 10))}, digits...)
+		n /= 10
+	}
+	return string(digits)
 }

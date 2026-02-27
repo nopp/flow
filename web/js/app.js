@@ -640,6 +640,105 @@ const appFormOverlay = document.getElementById('app-form-overlay');
 const appForm = document.getElementById('app-form');
 const appFormTitle = document.getElementById('app-form-title');
 const appIdInput = document.getElementById('app-id');
+const appStepsContainer = document.getElementById('app-steps');
+
+function clampStepSleepSec(value) {
+  const n = parseInt(String(value || '').trim(), 10);
+  if (isNaN(n) || n < 1) return 0;
+  return Math.min(3600, n);
+}
+
+function legacyStepsFromApp(app) {
+  const steps = [];
+  if ((app.test_cmd || '').trim()) {
+    steps.push({ name: 'test', cmd: app.test_cmd, sleep_sec: app.test_sleep_sec || 0 });
+  }
+  if ((app.build_cmd || '').trim()) {
+    steps.push({ name: 'build', cmd: app.build_cmd, sleep_sec: app.build_sleep_sec || 0 });
+  }
+  if ((app.deploy_cmd || '').trim()) {
+    steps.push({ name: 'deploy', cmd: app.deploy_cmd, sleep_sec: app.deploy_sleep_sec || 0 });
+  }
+  return steps;
+}
+
+function getEffectiveStepsForForm(app) {
+  if (Array.isArray(app.steps) && app.steps.length > 0) return app.steps;
+  return legacyStepsFromApp(app);
+}
+
+function renderStepRow(step = {}) {
+  if (!appStepsContainer) return;
+  const row = document.createElement('div');
+  row.className = 'step-row';
+  const stepName = (step.name || '').trim();
+  const stepCmd = (step.cmd || '').trim();
+  const sleepSec = clampStepSleepSec(step.sleep_sec);
+  row.innerHTML = `
+    <div class="step-row-top">
+      <input type="text" class="form-input step-name" placeholder="Step name (e.g. test, build, deploy)" value="${escapeHtml(stepName)}" />
+      <button type="button" class="btn btn-ghost step-remove-btn">Remove</button>
+    </div>
+    <div class="step-row-bottom">
+      <input type="text" class="form-input step-cmd" placeholder="Command or script path" value="${escapeHtml(stepCmd)}" />
+      <input type="number" class="form-input step-sleep-sec" min="0" max="3600" placeholder="Sleep (s)" value="${sleepSec > 0 ? String(sleepSec) : ''}" />
+    </div>
+  `;
+  const removeBtn = row.querySelector('.step-remove-btn');
+  if (removeBtn) {
+    removeBtn.addEventListener('click', () => {
+      row.remove();
+      ensureAtLeastOneStepRow();
+      refreshStepRemoveButtons();
+    });
+  }
+  appStepsContainer.appendChild(row);
+}
+
+function refreshStepRemoveButtons() {
+  if (!appStepsContainer) return;
+  const rows = appStepsContainer.querySelectorAll('.step-row');
+  const disabled = rows.length <= 1;
+  rows.forEach(row => {
+    const btn = row.querySelector('.step-remove-btn');
+    if (btn) btn.disabled = disabled;
+  });
+}
+
+function ensureAtLeastOneStepRow() {
+  if (!appStepsContainer) return;
+  if (appStepsContainer.querySelectorAll('.step-row').length === 0) {
+    renderStepRow({ name: '', cmd: '', sleep_sec: 0 });
+  }
+}
+
+function setAppStepsInForm(steps) {
+  if (!appStepsContainer) return;
+  appStepsContainer.innerHTML = '';
+  const list = Array.isArray(steps) && steps.length > 0 ? steps : [{ name: '', cmd: '', sleep_sec: 0 }];
+  list.forEach(step => renderStepRow(step));
+  refreshStepRemoveButtons();
+}
+
+function collectAppStepsFromForm() {
+  if (!appStepsContainer) return [];
+  const rows = Array.from(appStepsContainer.querySelectorAll('.step-row'));
+  const steps = [];
+  rows.forEach((row, i) => {
+    const nameInput = row.querySelector('.step-name');
+    const cmdInput = row.querySelector('.step-cmd');
+    const sleepInput = row.querySelector('.step-sleep-sec');
+    const cmd = (cmdInput && cmdInput.value ? cmdInput.value : '').trim();
+    if (!cmd) return;
+    const rawName = (nameInput && nameInput.value ? nameInput.value : '').trim();
+    steps.push({
+      name: rawName || `step-${i + 1}`,
+      cmd,
+      sleep_sec: clampStepSleepSec(sleepInput ? sleepInput.value : 0),
+    });
+  });
+  return steps;
+}
 
 async function openAppForm(appId) {
   const overlay = document.getElementById('app-form-overlay');
@@ -659,21 +758,7 @@ async function openAppForm(appId) {
       document.getElementById('app-name').value = app.name || '';
       document.getElementById('app-repo').value = app.repo || '';
       document.getElementById('app-branch').value = app.branch || 'main';
-      document.getElementById('app-test-cmd').value = app.test_cmd || '';
-      document.getElementById('app-build-cmd').value = app.build_cmd || '';
-      document.getElementById('app-deploy-cmd').value = app.deploy_cmd || '';
-      const testSec = app.test_sleep_sec || 0;
-      const buildSec = app.build_sleep_sec || 0;
-      const deploySec = app.deploy_sleep_sec || 0;
-      document.getElementById('app-test-sleep').checked = testSec > 0;
-      document.getElementById('app-test-sleep-sec').value = testSec > 0 ? String(testSec) : '';
-      document.getElementById('app-test-sleep-sec').disabled = testSec <= 0;
-      document.getElementById('app-build-sleep').checked = buildSec > 0;
-      document.getElementById('app-build-sleep-sec').value = buildSec > 0 ? String(buildSec) : '';
-      document.getElementById('app-build-sleep-sec').disabled = buildSec <= 0;
-      document.getElementById('app-deploy-sleep').checked = deploySec > 0;
-      document.getElementById('app-deploy-sleep-sec').value = deploySec > 0 ? String(deploySec) : '';
-      document.getElementById('app-deploy-sleep-sec').disabled = deploySec <= 0;
+      setAppStepsInForm(getEffectiveStepsForForm(app));
     } catch (_) {
       showToast('Failed to load app', 'error');
     }
@@ -682,9 +767,7 @@ async function openAppForm(appId) {
     if (idInput) idInput.disabled = false;
     form.reset();
     document.getElementById('app-branch').value = 'main';
-    document.getElementById('app-test-sleep-sec').disabled = true;
-    document.getElementById('app-build-sleep-sec').disabled = true;
-    document.getElementById('app-deploy-sleep-sec').disabled = true;
+    setAppStepsInForm([]);
   }
 }
 
@@ -699,60 +782,45 @@ async function getApp(id) {
   return res.json();
 }
 
-function getSleepSec(checkboxId, inputId) {
-  const cb = document.getElementById(checkboxId);
-  const input = document.getElementById(inputId);
-  if (!cb || !cb.checked || !input) return 0;
-  const n = parseInt(input.value, 10);
-  return isNaN(n) || n < 1 ? 0 : Math.min(3600, n);
-}
-
 if (appForm) {
   appForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = document.getElementById('app-form');
     const editId = (form && form.dataset.editId) || '';
-    const app = {
-    id: document.getElementById('app-id').value.trim(),
-    name: document.getElementById('app-name').value.trim(),
-    repo: document.getElementById('app-repo').value.trim(),
-    branch: document.getElementById('app-branch').value.trim() || 'main',
-    test_cmd: document.getElementById('app-test-cmd').value.trim(),
-    build_cmd: document.getElementById('app-build-cmd').value.trim(),
-    deploy_cmd: document.getElementById('app-deploy-cmd').value.trim(),
-    test_sleep_sec: getSleepSec('app-test-sleep', 'app-test-sleep-sec'),
-    build_sleep_sec: getSleepSec('app-build-sleep', 'app-build-sleep-sec'),
-    deploy_sleep_sec: getSleepSec('app-deploy-sleep', 'app-deploy-sleep-sec'),
-  };
-  try {
-    if (editId) {
-      await updateApp(editId, app);
-      showToast('App updated.', 'success');
-    } else {
-      await createApp(app);
-      showToast('App created.', 'success');
+    const steps = collectAppStepsFromForm();
+    if (!steps.length) {
+      showToast('At least one step command is required.', 'error');
+      return;
     }
-    closeAppForm();
-    loadApps();
-  } catch (err) {
-    showToast(err.message || 'Failed to save app', 'error');
-  }
+    const app = {
+      id: document.getElementById('app-id').value.trim(),
+      name: document.getElementById('app-name').value.trim(),
+      repo: document.getElementById('app-repo').value.trim(),
+      branch: document.getElementById('app-branch').value.trim() || 'main',
+      steps,
+    };
+    try {
+      if (editId) {
+        await updateApp(editId, app);
+        showToast('App updated.', 'success');
+      } else {
+        await createApp(app);
+        showToast('App created.', 'success');
+      }
+      closeAppForm();
+      loadApps();
+    } catch (err) {
+      showToast(err.message || 'Failed to save app', 'error');
+    }
   });
 }
 
-function bindSleepCheckbox(checkboxId, inputId) {
-  const cb = document.getElementById(checkboxId);
-  const input = document.getElementById(inputId);
-  if (!cb || !input) return;
-  cb.addEventListener('change', () => {
-    input.disabled = !cb.checked;
-    if (!cb.checked) input.value = '';
+const addStepBtn = document.getElementById('add-step-btn');
+if (addStepBtn) {
+  addStepBtn.addEventListener('click', () => {
+    renderStepRow({ name: '', cmd: '', sleep_sec: 0 });
+    refreshStepRemoveButtons();
   });
-}
-if (document.getElementById('app-test-sleep')) {
-  bindSleepCheckbox('app-test-sleep', 'app-test-sleep-sec');
-  bindSleepCheckbox('app-build-sleep', 'app-build-sleep-sec');
-  bindSleepCheckbox('app-deploy-sleep', 'app-deploy-sleep-sec');
 }
 
 const addAppBtn = document.getElementById('add-app-btn');

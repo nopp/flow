@@ -185,6 +185,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 		return
 	}
+	if auth.IsLegacyHash(user.PasswordHash) {
+		upgradedHash, err := auth.HashPassword(password)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to upgrade password hash"})
+			return
+		}
+		if err := s.store.UpdateUserPassword(user.ID, upgradedHash); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to upgrade password hash"})
+			return
+		}
+	}
 	sessionUser := authUser{ID: user.ID, Username: user.Username, IsAdmin: user.IsAdmin}
 	if err := s.createSession(w, sessionUser); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
@@ -387,6 +398,7 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		if a.ID == appID {
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"id": a.ID, "name": a.Name, "repo": a.Repo, "branch": a.Branch,
+				"steps":    a.EffectiveSteps(),
 				"test_cmd": a.TestCmd, "build_cmd": a.BuildCmd, "deploy_cmd": a.DeployCmd,
 				"test_sleep_sec": a.TestSleepSec, "build_sleep_sec": a.BuildSleepSec, "deploy_sleep_sec": a.DeploySleepSec,
 			})
@@ -412,16 +424,8 @@ func (s *Server) createApp(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id, name and repo are required"})
 		return
 	}
-	if strings.TrimSpace(app.TestCmd) == "" || strings.TrimSpace(app.BuildCmd) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "test_cmd and build_cmd are required"})
-		return
-	}
-	if app.Branch == "" {
-		app.Branch = "main"
-	}
-	if app.TestSleepSec < 0 || app.BuildSleepSec < 0 || app.DeploySleepSec < 0 ||
-		app.TestSleepSec > 3600 || app.BuildSleepSec > 3600 || app.DeploySleepSec > 3600 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "test_sleep_sec, build_sleep_sec, deploy_sleep_sec must be between 0 and 3600"})
+	if err := validateAndNormalizeApp(&app); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	s.appsMu.Lock()
@@ -464,16 +468,8 @@ func (s *Server) updateApp(w http.ResponseWriter, r *http.Request) {
 	}
 	app := body.App
 	app.ID = appID
-	if strings.TrimSpace(app.TestCmd) == "" || strings.TrimSpace(app.BuildCmd) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "test_cmd and build_cmd are required"})
-		return
-	}
-	if app.Branch == "" {
-		app.Branch = "main"
-	}
-	if app.TestSleepSec < 0 || app.BuildSleepSec < 0 || app.DeploySleepSec < 0 ||
-		app.TestSleepSec > 3600 || app.BuildSleepSec > 3600 || app.DeploySleepSec > 3600 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "test_sleep_sec, build_sleep_sec, deploy_sleep_sec must be between 0 and 3600"})
+	if err := validateAndNormalizeApp(&app); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	s.appsMu.Lock()
@@ -495,6 +491,23 @@ func (s *Server) updateApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, app)
+}
+
+func validateAndNormalizeApp(app *config.App) error {
+	if app.Branch == "" {
+		app.Branch = "main"
+	}
+	normalized := config.NormalizeAppSteps(*app)
+	if len(normalized.Steps) == 0 {
+		return errors.New("at least one step with command is required")
+	}
+	for _, step := range normalized.Steps {
+		if step.SleepSec < 0 || step.SleepSec > 3600 {
+			return errors.New("each step sleep_sec must be between 0 and 3600")
+		}
+	}
+	*app = normalized
+	return nil
 }
 
 func (s *Server) deleteApp(w http.ResponseWriter, r *http.Request) {
