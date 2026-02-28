@@ -14,7 +14,49 @@ import (
 type Step struct {
 	Name     string `yaml:"name" json:"name"`
 	Cmd      string `yaml:"cmd" json:"cmd"`
+	File     string `yaml:"file,omitempty" json:"file,omitempty"`
+	Script   string `yaml:"script,omitempty" json:"script,omitempty"`
 	SleepSec int    `yaml:"sleep_sec" json:"sleep_sec"`
+}
+
+// Kind returns which execution mode this step uses.
+// It returns "cmd", "file", "script", or "" when none/invalid.
+func (s Step) Kind() string {
+	cmd := strings.TrimSpace(s.Cmd)
+	file := strings.TrimSpace(s.File)
+	script := strings.TrimSpace(s.Script)
+	count := 0
+	kind := ""
+	if cmd != "" {
+		count++
+		kind = "cmd"
+	}
+	if file != "" {
+		count++
+		kind = "file"
+	}
+	if script != "" {
+		count++
+		kind = "script"
+	}
+	if count != 1 {
+		return ""
+	}
+	return kind
+}
+
+// CommandValue returns the value for the configured Kind.
+func (s Step) CommandValue() string {
+	switch s.Kind() {
+	case "cmd":
+		return strings.TrimSpace(s.Cmd)
+	case "file":
+		return strings.TrimSpace(s.File)
+	case "script":
+		return strings.TrimSpace(s.Script)
+	default:
+		return ""
+	}
 }
 
 // App defines a single application in the CI/CD system.
@@ -76,11 +118,17 @@ func (a App) EffectiveSteps() []Step {
 			if name == "" {
 				name = "step-" + strconvItoa(i+1)
 			}
-			cmd := strings.TrimSpace(s.Cmd)
-			if cmd == "" {
+			normalized := Step{
+				Name:     name,
+				Cmd:      strings.TrimSpace(s.Cmd),
+				File:     strings.TrimSpace(s.File),
+				Script:   strings.TrimSpace(s.Script),
+				SleepSec: s.SleepSec,
+			}
+			if normalized.Kind() == "" {
 				continue
 			}
-			out = append(out, Step{Name: name, Cmd: cmd, SleepSec: s.SleepSec})
+			out = append(out, normalized)
 		}
 		return out
 	}

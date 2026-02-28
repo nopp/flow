@@ -181,6 +181,35 @@ func TestServer_CreateAndGetAppWithDynamicSteps(t *testing.T) {
 	}
 }
 
+func TestServer_RejectsStepWithMultipleExecutionModes(t *testing.T) {
+	h, st, _, _ := setupTestServer(t, []config.App{
+		{ID: "seed", Name: "Seed", Repo: "https://example.com/seed.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},
+	})
+	adminCookie := loginAndCookie(t, h, "admin", "admin")
+	if _, err := st.CreateSSHKey("key-main", "dummy-private-key"); err != nil {
+		t.Fatal(err)
+	}
+
+	createBody := map[string]interface{}{
+		"name":         "App Invalid",
+		"repo":         "https://example.com/invalid.git",
+		"branch":       "main",
+		"ssh_key_name": "key-main",
+		"steps": []map[string]interface{}{
+			{"name": "bad", "cmd": "echo a", "file": "scripts/run.sh"},
+		},
+	}
+	bodyBytes, _ := json.Marshal(createBody)
+	reqCreate := httptest.NewRequest(http.MethodPost, "/api/apps", bytes.NewReader(bodyBytes))
+	reqCreate.Header.Set("Content-Type", "application/json")
+	reqCreate.AddCookie(adminCookie)
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid step mode, got %d body=%s", recCreate.Code, recCreate.Body.String())
+	}
+}
+
 func TestServer_ChangeOwnPassword(t *testing.T) {
 	h, st, _, _ := setupTestServer(t, []config.App{
 		{ID: "app-a", Name: "App A", Repo: "https://example.com/a.git", Branch: "main", TestCmd: "echo test", BuildCmd: "echo build"},

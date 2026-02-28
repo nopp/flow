@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NoppFlow — App Setup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="app-screen" class="app">
+    <header class="header">
+      <div class="header-row">
+        <div>
+          <h1 class="logo">NoppFlow</h1>
+          <p class="tagline">Lightweight CI/CD for Labs</p>
+        </div>
+        <nav class="header-nav">
+          <a href="/" class="btn btn-ghost">Recent runs</a>
+          <a href="/apps.html" class="btn btn-ghost">Apps</a>
+          <a href="/access.html" class="btn btn-ghost">Access</a>
+          <a href="/docs.html" class="btn btn-ghost" target="_blank" rel="noopener">Docs</a>
+        </nav>
+        <div class="header-actions">
+          <a id="current-user" class="current-user" href="/profile.html"></a>
+          <button type="button" id="logout-btn" class="btn btn-ghost">Logout</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="section">
+        <div class="section-header">
+          <h2 id="app-form-title" class="section-title">Add app</h2>
+          <a href="/apps.html" class="btn btn-ghost">Back</a>
+        </div>
+        <div class="app-form-page-card">
+          <form id="app-form" class="app-form app-form-page" data-edit-id="">
+            <label class="form-label">Name</label>
+            <input type="text" id="app-name" name="name" class="form-input" required placeholder="My Service" />
+            <label class="form-label">Repository URL</label>
+            <input type="url" id="app-repo" name="repo" class="form-input" required placeholder="https://github.com/org/repo.git" />
+            <label class="form-label">Branch</label>
+            <input type="text" id="app-branch" name="branch" class="form-input" placeholder="main" value="main" />
+            <label class="form-label">SSH key <span class="form-hint">(used for git clone/pull)</span></label>
+            <select id="app-ssh-key" name="ssh_key_name" class="form-input" required></select>
+            <div class="steps-header">
+              <label class="form-label">Pipeline steps <span class="form-hint">(each step must use command, file or inline script)</span></label>
+              <button type="button" id="add-step-btn" class="btn btn-ghost">Add step</button>
+            </div>
+            <div id="app-steps" class="steps-list"></div>
+            <div class="form-actions">
+              <a href="/apps.html" class="btn btn-ghost">Cancel</a>
+              <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

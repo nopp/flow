@@ -363,7 +363,7 @@ function renderApps(container, apps) {
     const canCreate = currentUser && currentUser.is_admin;
     container.innerHTML = `<p class="empty-state">${emptyMsg}${canCreate ? ' <button type="button" class="btn btn-primary" id="add-app-empty">Add app</button>' : ''}</p>`;
     const addBtn = container.querySelector('#add-app-empty');
-    if (addBtn) addBtn.addEventListener('click', () => openAppForm(null));
+    if (addBtn) addBtn.addEventListener('click', () => goToAppForm(null));
     return;
   }
   container.innerHTML = list.map(app => `
@@ -395,7 +395,7 @@ function renderApps(container, apps) {
     });
   });
   container.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => openAppForm(btn.dataset.appId));
+    btn.addEventListener('click', () => goToAppForm(btn.dataset.appId));
   });
   container.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', () => confirmDeleteApp(btn.dataset.appId));
@@ -673,6 +673,15 @@ const appForm = document.getElementById('app-form');
 const appStepsContainer = document.getElementById('app-steps');
 let appSSHKeysCache = [];
 
+function goToAppForm(appId) {
+  const base = '/app-form.html';
+  if (!appId) {
+    window.location.href = base;
+    return;
+  }
+  window.location.href = `${base}?app_id=${encodeURIComponent(appId)}`;
+}
+
 function clampStepSleepSec(value) {
   const n = parseInt(String(value || '').trim(), 10);
   if (isNaN(n) || n < 1) return 0;
@@ -698,12 +707,42 @@ function getEffectiveStepsForForm(app) {
   return legacyStepsFromApp(app);
 }
 
+function stepTypeFromData(step = {}) {
+  if ((step.cmd || '').trim()) return 'cmd';
+  if ((step.file || '').trim()) return 'file';
+  if ((step.script || '').trim()) return 'script';
+  return 'cmd';
+}
+
+function stepValueFromData(step = {}, type = 'cmd') {
+  if (type === 'file') return (step.file || '').trim();
+  if (type === 'script') return step.script || '';
+  return (step.cmd || '').trim();
+}
+
+function renderStepValueInput(type, value) {
+  if (type === 'script') {
+    return `<textarea class="form-input textarea-input step-value-input step-script" placeholder="Inline script (shell)" spellcheck="false">${escapeHtml(value)}</textarea>`;
+  }
+  if (type === 'file') {
+    return `<input type="text" class="form-input step-value-input" placeholder="Script file path in repo (e.g. scripts/deploy.sh)" value="${escapeHtml(value)}" />`;
+  }
+  return `<input type="text" class="form-input step-value-input" placeholder="Command (e.g. go test ./...)" value="${escapeHtml(value)}" />`;
+}
+
+function setStepValueInput(row, type, value) {
+  const valueWrap = row.querySelector('.step-value');
+  if (!valueWrap) return;
+  valueWrap.innerHTML = renderStepValueInput(type, value);
+}
+
 function renderStepRow(step = {}) {
   if (!appStepsContainer) return;
   const row = document.createElement('div');
   row.className = 'step-row';
   const stepName = (step.name || '').trim();
-  const stepCmd = (step.cmd || '').trim();
+  const stepType = stepTypeFromData(step);
+  const stepValue = stepValueFromData(step, stepType);
   const sleepSec = clampStepSleepSec(step.sleep_sec);
   row.innerHTML = `
     <div class="step-row-top">
@@ -711,11 +750,22 @@ function renderStepRow(step = {}) {
       <button type="button" class="btn btn-ghost step-remove-btn">Remove</button>
     </div>
     <div class="step-row-bottom">
-      <input type="text" class="form-input step-cmd" placeholder="Command or script path" value="${escapeHtml(stepCmd)}" />
+      <select class="form-input step-type">
+        <option value="cmd" ${stepType === 'cmd' ? 'selected' : ''}>Command</option>
+        <option value="file" ${stepType === 'file' ? 'selected' : ''}>File</option>
+        <option value="script" ${stepType === 'script' ? 'selected' : ''}>Inline script</option>
+      </select>
       <input type="number" class="form-input step-sleep-sec" min="0" max="3600" placeholder="Sleep (s)" value="${sleepSec > 0 ? String(sleepSec) : ''}" />
     </div>
+    <div class="step-value">${renderStepValueInput(stepType, stepValue)}</div>
   `;
   const removeBtn = row.querySelector('.step-remove-btn');
+  const typeSelect = row.querySelector('.step-type');
+  if (typeSelect) {
+    typeSelect.addEventListener('change', () => {
+      setStepValueInput(row, typeSelect.value, '');
+    });
+  }
   if (removeBtn) {
     removeBtn.addEventListener('click', () => {
       row.remove();
@@ -739,14 +789,16 @@ function refreshStepRemoveButtons() {
 function ensureAtLeastOneStepRow() {
   if (!appStepsContainer) return;
   if (appStepsContainer.querySelectorAll('.step-row').length === 0) {
-    renderStepRow({ name: '', cmd: '', sleep_sec: 0 });
+    renderStepRow({ name: '', cmd: '', file: '', script: '', sleep_sec: 0 });
   }
 }
 
 function setAppStepsInForm(steps) {
   if (!appStepsContainer) return;
   appStepsContainer.innerHTML = '';
-  const list = Array.isArray(steps) && steps.length > 0 ? steps : [{ name: '', cmd: '', sleep_sec: 0 }];
+  const list = Array.isArray(steps) && steps.length > 0
+    ? steps
+    : [{ name: '', cmd: '', file: '', script: '', sleep_sec: 0 }];
   list.forEach(step => renderStepRow(step));
   refreshStepRemoveButtons();
 }
@@ -757,16 +809,25 @@ function collectAppStepsFromForm() {
   const steps = [];
   rows.forEach((row, i) => {
     const nameInput = row.querySelector('.step-name');
-    const cmdInput = row.querySelector('.step-cmd');
+    const typeInput = row.querySelector('.step-type');
+    const valueInput = row.querySelector('.step-value-input');
     const sleepInput = row.querySelector('.step-sleep-sec');
-    const cmd = (cmdInput && cmdInput.value ? cmdInput.value : '').trim();
-    if (!cmd) return;
+    const type = (typeInput && typeInput.value ? typeInput.value : 'cmd').trim();
+    const value = (valueInput && valueInput.value != null ? valueInput.value : '').trim();
+    if (!value) return;
     const rawName = (nameInput && nameInput.value ? nameInput.value : '').trim();
-    steps.push({
+    const step = {
       name: rawName || `step-${i + 1}`,
-      cmd,
       sleep_sec: clampStepSleepSec(sleepInput ? sleepInput.value : 0),
-    });
+    };
+    if (type === 'file') {
+      step.file = value;
+    } else if (type === 'script') {
+      step.script = value;
+    } else {
+      step.cmd = value;
+    }
+    steps.push(step);
   });
   return steps;
 }
@@ -795,12 +856,13 @@ function renderSSHKeyOptions(selectedName, isAdminEditing) {
 }
 
 async function openAppForm(appId) {
-  const overlay = document.getElementById('app-form-overlay');
   const form = document.getElementById('app-form');
   const titleEl = document.getElementById('app-form-title');
-  if (!form || !overlay) return;
+  if (!form) return;
   form.dataset.editId = appId || '';
-  overlay.setAttribute('aria-hidden', 'false');
+  if (appFormOverlay) {
+    appFormOverlay.setAttribute('aria-hidden', 'false');
+  }
 
   if (appId) {
     if (titleEl) titleEl.textContent = 'Edit app';
@@ -836,8 +898,11 @@ async function openAppForm(appId) {
 }
 
 function closeAppForm() {
-  const overlay = document.getElementById('app-form-overlay');
-  if (overlay) overlay.setAttribute('aria-hidden', 'true');
+  if (appFormOverlay) {
+    appFormOverlay.setAttribute('aria-hidden', 'true');
+    return;
+  }
+  window.location.href = '/apps.html';
 }
 
 async function getApp(id) {
@@ -853,7 +918,7 @@ if (appForm) {
     const editId = (form && form.dataset.editId) || '';
     const steps = collectAppStepsFromForm();
     if (!steps.length) {
-      showToast('At least one step command is required.', 'error');
+      showToast('At least one valid step is required.', 'error');
       return;
     }
     const app = {
@@ -875,8 +940,12 @@ if (appForm) {
         await createApp(app);
         showToast('App created.', 'success');
       }
-      closeAppForm();
-      loadApps();
+      if (appFormOverlay) {
+        closeAppForm();
+        loadApps();
+      } else {
+        window.location.href = '/apps.html';
+      }
     } catch (err) {
       showToast(err.message || 'Failed to save app', 'error');
     }
@@ -886,18 +955,15 @@ if (appForm) {
 const addStepBtn = document.getElementById('add-step-btn');
 if (addStepBtn) {
   addStepBtn.addEventListener('click', () => {
-    renderStepRow({ name: '', cmd: '', sleep_sec: 0 });
+    renderStepRow({ name: '', cmd: '', file: '', script: '', sleep_sec: 0 });
     refreshStepRemoveButtons();
   });
 }
 
 const addAppBtn = document.getElementById('add-app-btn');
-if (addAppBtn) addAppBtn.addEventListener('click', () => openAppForm(null));
-
-const appFormCloseBtn = document.getElementById('app-form-close');
-if (appFormCloseBtn) appFormCloseBtn.addEventListener('click', closeAppForm);
-const appFormCancelBtn = document.getElementById('app-form-cancel');
-if (appFormCancelBtn) appFormCancelBtn.addEventListener('click', closeAppForm);
+if (addAppBtn && addAppBtn.tagName === 'BUTTON') {
+  addAppBtn.addEventListener('click', () => goToAppForm(null));
+}
 if (appFormOverlay) appFormOverlay.addEventListener('click', (e) => { if (e.target === appFormOverlay) closeAppForm(); });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -945,6 +1011,22 @@ function initAppsPage() {
   if (addAppBtn && currentUser && !currentUser.is_admin) {
     addAppBtn.hidden = true;
   }
+}
+
+function getAppIDFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  return (params.get('app_id') || '').trim();
+}
+
+async function initAppFormPage() {
+  if (!appForm) return;
+  const appId = getAppIDFromQuery();
+  if (!currentUser.is_admin && !appId) {
+    showToast('Only admins can create apps.', 'error');
+    window.location.href = '/apps.html';
+    return;
+  }
+  await openAppForm(appId || '');
 }
 
 function selectedGroupIDsFromContainer(container) {
@@ -1526,6 +1608,7 @@ async function init() {
   try {
     if (document.getElementById('runs-container')) initRunsPage();
     if (document.getElementById('apps-grid')) initAppsPage();
+    if (document.getElementById('app-form')) await initAppFormPage();
     if (document.getElementById('profile-info')) initProfilePage();
     if (document.getElementById('group-title')) initGroupPage();
     if (document.getElementById('groups-container')) {

@@ -521,6 +521,18 @@ body {
   box-shadow: var(--shadow);
 }
 
+.app-form-page-card {
+  max-width: 760px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.app-form-page {
+  max-height: none;
+}
+
 .app-form {
   padding: 1.25rem;
 }
@@ -635,6 +647,14 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 110px;
   gap: 0.5rem;
+}
+
+.step-value {
+  margin-top: 0.5rem;
+}
+
+.step-script {
+  min-height: 120px;
 }
 
 .form-actions {
@@ -781,4 +801,10 @@ body {
 .auth-card {
   max-width: 420px;
   margin: 2rem auto 0;
+}
+
+@media (max-width: 720px) {
+  .step-row-bottom {
+    grid-template-columns: 1fr;
+  }
 }

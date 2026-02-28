@@ -11,3 +11,13 @@ apps:
         - name: build
           cmd: go build -o .
           sleep_sec: 10
+    - id: app-af355cd5db5b21b5
+      name: app-teste2
+      repo: https://github.com/nopp/app-teste.git
+      branch: main
+      ssh_key_name: ghub-dev-apps
+      steps:
+        - name: teste-inline
+          cmd: ""
+          script: echo "testando"
+          sleep_sec: 0

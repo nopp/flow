@@ -556,9 +556,12 @@ func (s *Server) validateAndNormalizeApp(app *config.App, requireSSHKey bool) er
 	}
 	normalized := config.NormalizeAppSteps(*app)
 	if len(normalized.Steps) == 0 {
-		return errors.New("at least one step with command is required")
+		return errors.New("at least one step is required")
 	}
 	for _, step := range normalized.Steps {
+		if step.Kind() == "" {
+			return errors.New("each step must define exactly one of: cmd, file, script")
+		}
 		if step.SleepSec < 0 || step.SleepSec > 3600 {
 			return errors.New("each step sleep_sec must be between 0 and 3600")
 		}

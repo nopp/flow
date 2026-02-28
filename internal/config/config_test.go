@@ -78,3 +78,24 @@ func TestEffectiveStepsFromDynamicList(t *testing.T) {
 		t.Fatalf("unexpected second step: %+v", steps[1])
 	}
 }
+
+func TestEffectiveStepsSupportsFileAndScript(t *testing.T) {
+	app := App{
+		ID: "dynamic-kinds",
+		Steps: []Step{
+			{Name: "deploy-file", File: "scripts/deploy.sh"},
+			{Name: "inline", Script: "echo inline"},
+			{Name: "invalid", Cmd: "echo one", File: "script.sh"},
+		},
+	}
+	steps := app.EffectiveSteps()
+	if len(steps) != 2 {
+		t.Fatalf("expected 2 valid steps, got %d", len(steps))
+	}
+	if steps[0].Kind() != "file" || steps[0].File != "scripts/deploy.sh" {
+		t.Fatalf("unexpected first step: %+v", steps[0])
+	}
+	if steps[1].Kind() != "script" || steps[1].Script != "echo inline" {
+		t.Fatalf("unexpected second step: %+v", steps[1])
+	}
+}

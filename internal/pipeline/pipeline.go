@@ -81,7 +81,7 @@ func (r *Runner) Run(app config.App, opts RunOptions, onLogUpdate func(log strin
 	steps := app.EffectiveSteps()
 	for _, step := range steps {
 		appendLog("=== Step: %s ===", step.Name)
-		if err := r.runCmdWithLog(appWorkDir, step.Cmd, &log); err != nil {
+		if err := r.runStepWithLog(appWorkDir, step, &log); err != nil {
 			if onLogUpdate != nil {
 				onLogUpdate(log.String())
 			}
@@ -125,6 +125,37 @@ func (r *Runner) runCmdWithLog(dir, command string, log *bytes.Buffer) error {
 	cmd.Stdout = log
 	cmd.Stderr = log
 	return cmd.Run()
+}
+
+// runFileWithLog runs a script file path via sh in dir.
+func (r *Runner) runFileWithLog(dir, filePath string, log *bytes.Buffer) error {
+	cmd := exec.Command("sh", filePath)
+	cmd.Dir = dir
+	cmd.Stdout = log
+	cmd.Stderr = log
+	return cmd.Run()
+}
+
+// runScriptWithLog runs inline script text via sh -c in dir.
+func (r *Runner) runScriptWithLog(dir, script string, log *bytes.Buffer) error {
+	cmd := exec.Command("sh", "-c", script)
+	cmd.Dir = dir
+	cmd.Stdout = log
+	cmd.Stderr = log
+	return cmd.Run()
+}
+
+func (r *Runner) runStepWithLog(dir string, step config.Step, log *bytes.Buffer) error {
+	switch step.Kind() {
+	case "cmd":
+		return r.runCmdWithLog(dir, step.Cmd, log)
+	case "file":
+		return r.runFileWithLog(dir, step.File, log)
+	case "script":
+		return r.runScriptWithLog(dir, step.Script, log)
+	default:
+		return fmt.Errorf("invalid step execution mode")
+	}
 }
 
 // output runs a command in dir and returns its combined stdout.
