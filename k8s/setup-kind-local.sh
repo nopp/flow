@@ -7,6 +7,7 @@ REGISTRY_NAME="${REGISTRY_NAME:-kind-registry}"
 REGISTRY_PORT="${REGISTRY_PORT:-5001}"
 REGISTRY_HOST="${REGISTRY_HOST:-localhost}"
 REGISTRY_ADDR="${REGISTRY_HOST}:${REGISTRY_PORT}"
+REGISTRY_IN_CLUSTER_ADDR="${REGISTRY_NAME}:5000"
 CONTROLLER_NS="${CONTROLLER_NS:-noppflow}"
 APPS_NS="${APPS_NS:-apps}"
 APP_IMAGE_TAG="${APP_IMAGE_TAG:-$(date +%Y%m%d%H%M%S)}"
@@ -21,7 +22,13 @@ DB_MODE="${DB_MODE:-sqlite}"
 RESET_DATABASE="${RESET_DATABASE:-true}"
 ENABLE_INCLUSTER_REGISTRY="${ENABLE_INCLUSTER_REGISTRY:-true}"
 INCLUSTER_REGISTRY_NAME="${INCLUSTER_REGISTRY_NAME:-noppflow-registry}"
+INCLUSTER_REGISTRY_ADDR="${INCLUSTER_REGISTRY_NAME}.${APPS_NS}.svc.cluster.local:5000"
 APP_RUNTIME_REGISTRY_ADDR="${APP_RUNTIME_REGISTRY_ADDR:-}"
+if [ -z "${APP_RUNTIME_REGISTRY_ADDR}" ]; then
+  APP_RUNTIME_REGISTRY_ADDR="${REGISTRY_IN_CLUSTER_ADDR}"
+fi
+APP_RUNTIME_REGISTRY_PUSH_ADDR="${APP_RUNTIME_REGISTRY_PUSH_ADDR:-${APP_RUNTIME_REGISTRY_ADDR}}"
+APP_RUNTIME_REGISTRY_PULL_ADDR="${APP_RUNTIME_REGISTRY_PULL_ADDR:-${REGISTRY_ADDR}}"
 SEED_TEST_APP="${SEED_TEST_APP:-true}"
 TEST_APP_NAME="${TEST_APP_NAME:-app-teste}"
 TEST_APP_REPO="${TEST_APP_REPO:-https://github.com/nopp/app-teste.git}"
@@ -90,6 +97,15 @@ MSG
 
 create_kind_cluster() {
   local kind_config
+  local incluster_registry_patch=""
+  if [ "${ENABLE_INCLUSTER_REGISTRY}" = "true" ]; then
+    incluster_registry_patch=$(cat <<EOF
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."${INCLUSTER_REGISTRY_ADDR}"]
+      endpoint = ["http://${INCLUSTER_REGISTRY_ADDR}"]
+EOF
+)
+  fi
   kind_config="$(mktemp)"
   cat > "${kind_config}" <<CFG
 kind: Cluster
@@ -98,6 +114,10 @@ containerdConfigPatches:
   - |-
     [plugins."io.containerd.grpc.v1.cri".registry.mirrors."${REGISTRY_ADDR}"]
       endpoint = ["http://${REGISTRY_NAME}:5000"]
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."${REGISTRY_IN_CLUSTER_ADDR}"]
+      endpoint = ["http://${REGISTRY_NAME}:5000"]
+${incluster_registry_patch}
 nodes:
   - role: control-plane
 CFG
@@ -124,6 +144,21 @@ load_kind_image_if_possible() {
   fi
 
   echo "- warning: could not preload ${image} into kind; continuing with registry pull path"
+}
+
+configure_kind_registry_http() {
+  local hostport="$1"
+  local node
+
+  if [ -z "${hostport}" ]; then
+    return 0
+  fi
+
+  echo "- configuring kind nodes for HTTP registry ${hostport}"
+  for node in $(kind get nodes --name "${CLUSTER_NAME}"); do
+    "${CONTAINER_CLI}" exec "${node}" /bin/sh -lc "mkdir -p '/etc/containerd/certs.d/${hostport}' && printf '%s\n' 'server = \"http://${hostport}\"' '[host.\"http://${hostport}\"]' '  capabilities = [\"pull\", \"resolve\", \"push\"]' '  skip_verify = true' > '/etc/containerd/certs.d/${hostport}/hosts.toml'"
+    "${CONTAINER_CLI}" exec "${node}" /bin/sh -lc "kill -HUP \$(pidof containerd) >/dev/null 2>&1 || true"
+  done
 }
 
 for cmd in "${CONTAINER_CLI}" kind kubectl; do
@@ -216,9 +251,9 @@ build_test_app_payload() {
   "deploy_manifest_path":"k8s/",
   "steps":[
     {"name":"precheck","cmd":"echo deploying ${TEST_APP_NAME} && if [ -f k8s/deployment.yaml ]; then sed -i 's/app: .*/app: ${TEST_APP_NAME}/g' k8s/deployment.yaml; fi"},
-    {"name":"build_push","cmd":"IMAGE_TAG=run-${dollar}NOPPFLOW_RUN_ID; IMAGE_REF=${APP_RUNTIME_REGISTRY_ADDR}/${TEST_APP_NAME}:${dollar}IMAGE_TAG; test -f /workspace/repo/Dockerfile; echo building ${dollar}IMAGE_REF; kaniko-executor --context dir:///workspace/repo --dockerfile /workspace/repo/Dockerfile --destination ${dollar}IMAGE_REF --insecure --skip-tls-verify --insecure-pull && echo built ${dollar}IMAGE_REF"},
+    {"name":"build_push","cmd":"IMAGE_TAG=run-${dollar}NOPPFLOW_RUN_ID; IMAGE_REF=${APP_RUNTIME_REGISTRY_PUSH_ADDR}/${TEST_APP_NAME}:${dollar}IMAGE_TAG; test -f /workspace/repo/Dockerfile; echo building ${dollar}IMAGE_REF; kaniko-executor --context dir:///workspace/repo --dockerfile /workspace/repo/Dockerfile --destination ${dollar}IMAGE_REF --insecure --skip-tls-verify --insecure-pull && echo built ${dollar}IMAGE_REF"},
     {"name":"deploy_apply","k8s_deploy":true},
-    {"name":"deploy_set_image","cmd":"kubectl -n ${APPS_NS} set image deploy/${TEST_APP_NAME} ${TEST_APP_NAME}=${APP_RUNTIME_REGISTRY_ADDR}/${TEST_APP_NAME}:run-${dollar}NOPPFLOW_RUN_ID"},
+    {"name":"deploy_set_image","cmd":"kubectl -n ${APPS_NS} set image deploy/${TEST_APP_NAME} ${TEST_APP_NAME}=${APP_RUNTIME_REGISTRY_PULL_ADDR}/${TEST_APP_NAME}:run-${dollar}NOPPFLOW_RUN_ID"},
     {"name":"deploy_rollout","cmd":"kubectl -n ${APPS_NS} rollout status deploy/${TEST_APP_NAME} --timeout=180s"}
   ]
 }
@@ -469,6 +504,11 @@ if ! kubectl config get-contexts -o name | grep -qx "${KUBE_CONTEXT}"; then
   kind export kubeconfig --name "${CLUSTER_NAME}" >/dev/null
 fi
 kubectl config use-context "${KUBE_CONTEXT}" >/dev/null
+configure_kind_registry_http "${REGISTRY_ADDR}"
+configure_kind_registry_http "${REGISTRY_IN_CLUSTER_ADDR}"
+if [ "${ENABLE_INCLUSTER_REGISTRY}" = "true" ]; then
+  configure_kind_registry_http "${INCLUSTER_REGISTRY_ADDR}"
+fi
 
 echo "[3/10] Connecting registry to kind network"
 if [ "$("${CONTAINER_CLI}" inspect -f='{{json .NetworkSettings.Networks.kind}}' "${REGISTRY_NAME}")" = 'null' ]; then
@@ -555,14 +595,6 @@ spec:
       protocol: TCP
 REGISTRY
   kubectl -n "${APPS_NS}" rollout status deploy/"${INCLUSTER_REGISTRY_NAME}" --timeout=180s
-  if [ -z "${APP_RUNTIME_REGISTRY_ADDR}" ]; then
-    registry_cluster_ip="$(kubectl -n "${APPS_NS}" get svc "${INCLUSTER_REGISTRY_NAME}" -o jsonpath='{.spec.clusterIP}')"
-    APP_RUNTIME_REGISTRY_ADDR="${registry_cluster_ip}:5000"
-  fi
-else
-  if [ -z "${APP_RUNTIME_REGISTRY_ADDR}" ]; then
-    APP_RUNTIME_REGISTRY_ADDR="${REGISTRY_ADDR}"
-  fi
 fi
 
 echo "[8/10] Preparing database mode (${DB_MODE})"
@@ -674,6 +706,8 @@ echo "- Runner image: ${RUNNER_IMAGE}"
 echo "- Runner image (job): ${RUNNER_IMAGE_JOB}"
 echo "- Registry address: ${REGISTRY_ADDR}"
 echo "- Runtime app registry: ${APP_RUNTIME_REGISTRY_ADDR}"
+echo "- Runtime app registry (push from runner): ${APP_RUNTIME_REGISTRY_PUSH_ADDR}"
+echo "- Runtime app registry (pull by kubelet): ${APP_RUNTIME_REGISTRY_PULL_ADDR}"
 echo
 echo "Access UI with:"
 echo "kubectl -n ${CONTROLLER_NS} port-forward svc/noppflow 8080:80"

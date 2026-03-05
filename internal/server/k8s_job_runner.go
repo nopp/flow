@@ -246,6 +246,7 @@ func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool
 	deployMode := strings.TrimSpace(strings.ToLower(app.DeployMode))
 	for _, step := range steps {
 		lines = append(lines, fmt.Sprintf("echo %s", shellQuote("=== Step: "+step.Name+" ===")))
+		lines = append(lines, fmt.Sprintf("if [ ! -d /workspace/repo/.git ]; then echo %s; cd /; mkdir -p /workspace; rm -rf /workspace/repo; git clone --branch %s --single-branch %s /workspace/repo; fi", shellQuote("workspace repo missing; restoring from origin"), shellQuote(app.Branch), shellQuote(app.Repo)))
 		lines = append(lines, "if [ -d /workspace/repo ]; then cd /workspace/repo; elif [ -d /workspace ]; then cd /workspace; else cd /; fi")
 		switch step.Kind() {
 		case "cmd":
@@ -257,6 +258,13 @@ func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool
 		case "k8s_deploy":
 			if deployMode == "kubectl" {
 				lines = appendEnsureBinary(lines, "kubectl")
+				manifestPath := shellQuote(app.DeployManifestPath)
+				deployName := strings.TrimSpace(app.Name)
+				if deployName == "" {
+					deployName = strings.TrimSpace(app.ID)
+				}
+				sedExpr := shellQuote("s/xxnamexx/" + sedEscape(deployName) + "/g")
+				lines = append(lines, fmt.Sprintf("if [ -d %s ]; then find %s -type f \\( -name '*.yaml' -o -name '*.yml' \\) -exec sed -i %s {} +; elif [ -f %s ]; then sed -i %s %s; fi", manifestPath, manifestPath, sedExpr, manifestPath, sedExpr, manifestPath))
 				lines = append(lines, fmt.Sprintf("kubectl -n %s apply -f %s", shellQuote(app.K8sNamespace), shellQuote(app.DeployManifestPath)))
 			} else if deployMode == "helm" {
 				lines = appendEnsureBinary(lines, "helm")
@@ -279,12 +287,26 @@ func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool
 func appendEnsureBinary(lines []string, bin string) []string {
 	lines = append(lines, fmt.Sprintf("if ! command -v %s >/dev/null 2>&1; then", bin))
 	lines = append(lines, fmt.Sprintf("  echo %s", shellQuote(bin+" not found in runner image; attempting installation")))
-	lines = append(lines, fmt.Sprintf("  if command -v apk >/dev/null 2>&1; then apk add --no-cache %s; \\", bin))
-	lines = append(lines, fmt.Sprintf("  elif command -v apt-get >/dev/null 2>&1; then apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends %s; \\", bin))
-	lines = append(lines, fmt.Sprintf("  elif command -v microdnf >/dev/null 2>&1; then microdnf install -y %s; \\", bin))
-	lines = append(lines, fmt.Sprintf("  elif command -v dnf >/dev/null 2>&1; then dnf install -y %s; \\", bin))
-	lines = append(lines, fmt.Sprintf("  elif command -v yum >/dev/null 2>&1; then yum install -y %s; \\", bin))
-	lines = append(lines, fmt.Sprintf("  else echo %s; exit 127; fi", shellQuote("failed to install "+bin+": no supported package manager found")))
+	lines = append(lines, fmt.Sprintf("  if command -v apk >/dev/null 2>&1; then apk add --no-cache %s || true; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v apt-get >/dev/null 2>&1; then apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends %s || true; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v microdnf >/dev/null 2>&1; then microdnf install -y %s || true; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v dnf >/dev/null 2>&1; then dnf install -y %s || true; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v yum >/dev/null 2>&1; then yum install -y %s || true; \\", bin))
+	lines = append(lines, "  else true; fi")
+	lines = append(lines, fmt.Sprintf("  if ! command -v %s >/dev/null 2>&1; then", bin))
+	lines = append(lines, fmt.Sprintf("    echo %s", shellQuote(bin+" still unavailable after package manager attempt; trying direct download")))
+	lines = append(lines, "    arch=\"$(uname -m)\"")
+	lines = append(lines, "    case \"$arch\" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) arch=\"\" ;; esac")
+	lines = append(lines, "    if [ -n \"$arch\" ] && command -v curl >/dev/null 2>&1; then")
+	lines = append(lines, "      if [ \""+bin+"\" = \"kubectl\" ]; then")
+	lines = append(lines, "        curl -fsSL \"https://dl.k8s.io/release/v1.30.8/bin/linux/${arch}/kubectl\" -o /tmp/kubectl || true")
+	lines = append(lines, "        if [ -s /tmp/kubectl ]; then chmod +x /tmp/kubectl && cp /tmp/kubectl /usr/local/bin/kubectl || true; fi")
+	lines = append(lines, "      elif [ \""+bin+"\" = \"helm\" ]; then")
+	lines = append(lines, "        curl -fsSL \"https://get.helm.sh/helm-v3.16.4-linux-${arch}.tar.gz\" -o /tmp/helm.tgz || true")
+	lines = append(lines, "        if [ -s /tmp/helm.tgz ]; then tar -xzf /tmp/helm.tgz -C /tmp && cp \"/tmp/linux-${arch}/helm\" /usr/local/bin/helm || true; fi")
+	lines = append(lines, "      fi")
+	lines = append(lines, "    fi")
+	lines = append(lines, "  fi")
 	lines = append(lines, "fi")
 	lines = append(lines, fmt.Sprintf("command -v %s >/dev/null 2>&1 || { echo %s; exit 127; }", bin, shellQuote(bin+" unavailable after installation attempt")))
 	return lines
@@ -292,6 +314,13 @@ func appendEnsureBinary(lines []string, bin string) []string {
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+func sedEscape(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "&", "\\&")
+	s = strings.ReplaceAll(s, "/", "\\/")
+	return s
 }
 
 func indentYAMLBlock(s string, spaces int) string {
