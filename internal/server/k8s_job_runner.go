@@ -226,14 +226,14 @@ func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool
 		"mkdir -p /workspace",
 		"cd /workspace",
 		"export GIT_TERMINAL_PROMPT=0",
-		fmt.Sprintf("git clone --branch %s --single-branch %s repo", shellQuote(app.Branch), shellQuote(app.Repo)),
-		"cd repo",
 	}
 	if useSSHKey {
-		lines[3] = fmt.Sprintf("export GIT_SSH_COMMAND=%s", shellQuote("ssh -i /var/run/noppflow-ssh/id_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"))
-	} else {
-		lines = append(lines[:3], lines[4:]...)
+		lines = append(lines, fmt.Sprintf("export GIT_SSH_COMMAND=%s", shellQuote("ssh -i /var/run/noppflow-ssh/id_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new")))
 	}
+	lines = append(lines,
+		fmt.Sprintf("git clone --branch %s --single-branch %s repo", shellQuote(app.Branch), shellQuote(app.Repo)),
+		"cd repo",
+	)
 	for k, v := range stepEnv {
 		name := strings.TrimSpace(k)
 		if name == "" {
@@ -241,8 +241,12 @@ func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool
 		}
 		lines = append(lines, fmt.Sprintf("export %s=%s", name, shellQuote(v)))
 	}
+	// Ensure core system paths remain available even if a global env var overrides PATH.
+	lines = append(lines, "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}")
+	deployMode := strings.TrimSpace(strings.ToLower(app.DeployMode))
 	for _, step := range steps {
 		lines = append(lines, fmt.Sprintf("echo %s", shellQuote("=== Step: "+step.Name+" ===")))
+		lines = append(lines, "if [ -d /workspace/repo ]; then cd /workspace/repo; elif [ -d /workspace ]; then cd /workspace; else cd /; fi")
 		switch step.Kind() {
 		case "cmd":
 			lines = append(lines, fmt.Sprintf("sh -c %s", shellQuote(step.Cmd)))
@@ -251,9 +255,11 @@ func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool
 		case "script":
 			lines = append(lines, fmt.Sprintf("printf %%s %s | sh", shellQuote(step.Script)))
 		case "k8s_deploy":
-			if app.DeployMode == "kubectl" {
+			if deployMode == "kubectl" {
+				lines = appendEnsureBinary(lines, "kubectl")
 				lines = append(lines, fmt.Sprintf("kubectl -n %s apply -f %s", shellQuote(app.K8sNamespace), shellQuote(app.DeployManifestPath)))
-			} else if app.DeployMode == "helm" {
+			} else if deployMode == "helm" {
+				lines = appendEnsureBinary(lines, "helm")
 				helmCmd := fmt.Sprintf("helm upgrade --install %s %s -n %s", shellQuote(app.ID), shellQuote(app.HelmChart), shellQuote(app.K8sNamespace))
 				if strings.TrimSpace(app.HelmValuesPath) != "" {
 					helmCmd += fmt.Sprintf(" -f %s", shellQuote(app.HelmValuesPath))
@@ -268,6 +274,20 @@ func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool
 	}
 	lines = append(lines, "echo 'pipeline completed successfully'")
 	return strings.Join(lines, "\n")
+}
+
+func appendEnsureBinary(lines []string, bin string) []string {
+	lines = append(lines, fmt.Sprintf("if ! command -v %s >/dev/null 2>&1; then", bin))
+	lines = append(lines, fmt.Sprintf("  echo %s", shellQuote(bin+" not found in runner image; attempting installation")))
+	lines = append(lines, fmt.Sprintf("  if command -v apk >/dev/null 2>&1; then apk add --no-cache %s; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v apt-get >/dev/null 2>&1; then apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends %s; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v microdnf >/dev/null 2>&1; then microdnf install -y %s; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v dnf >/dev/null 2>&1; then dnf install -y %s; \\", bin))
+	lines = append(lines, fmt.Sprintf("  elif command -v yum >/dev/null 2>&1; then yum install -y %s; \\", bin))
+	lines = append(lines, fmt.Sprintf("  else echo %s; exit 127; fi", shellQuote("failed to install "+bin+": no supported package manager found")))
+	lines = append(lines, "fi")
+	lines = append(lines, fmt.Sprintf("command -v %s >/dev/null 2>&1 || { echo %s; exit 127; }", bin, shellQuote(bin+" unavailable after installation attempt")))
+	return lines
 }
 
 func shellQuote(s string) string {

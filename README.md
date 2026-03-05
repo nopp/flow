@@ -72,6 +72,7 @@ Each step has:
 
 Global env vars (admin-managed) are injected into all step executions, so `cmd` and `script` can use them directly (e.g. `$API_BASE_URL`).
 In Access, global env var values are masked by default and can be revealed with `Show values`.
+NoppFlow also injects `NOPPFLOW_RUN_ID` in each run, so you can create per-run image tags (e.g. `run-$NOPPFLOW_RUN_ID`).
 
 Before steps, NoppFlow clones or pulls the app repository into `work/<app_id>/`.
 Git clone/pull uses the app's configured SSH key (`ssh_key_name`).

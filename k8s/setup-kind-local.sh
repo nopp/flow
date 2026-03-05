@@ -14,10 +14,14 @@ APP_IMAGE_REPO="${APP_IMAGE_REPO:-${REGISTRY_ADDR}/noppflow}"
 RUNNER_IMAGE_REPO="${RUNNER_IMAGE_REPO:-${REGISTRY_ADDR}/noppflow-runner}"
 APP_IMAGE="${APP_IMAGE:-${APP_IMAGE_REPO}:${APP_IMAGE_TAG}}"
 RUNNER_IMAGE="${RUNNER_IMAGE:-${RUNNER_IMAGE_REPO}:${APP_IMAGE_TAG}}"
+RUNNER_IMAGE_JOB="${RUNNER_IMAGE_JOB:-${RUNNER_IMAGE}}"
 CONTAINER_CLI="${CONTAINER_CLI:-docker}"
 KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.30.8}"
 DB_MODE="${DB_MODE:-sqlite}"
 RESET_DATABASE="${RESET_DATABASE:-true}"
+ENABLE_INCLUSTER_REGISTRY="${ENABLE_INCLUSTER_REGISTRY:-true}"
+INCLUSTER_REGISTRY_NAME="${INCLUSTER_REGISTRY_NAME:-noppflow-registry}"
+APP_RUNTIME_REGISTRY_ADDR="${APP_RUNTIME_REGISTRY_ADDR:-}"
 SEED_TEST_APP="${SEED_TEST_APP:-true}"
 TEST_APP_NAME="${TEST_APP_NAME:-app-teste}"
 TEST_APP_REPO="${TEST_APP_REPO:-https://github.com/nopp/app-teste.git}"
@@ -192,10 +196,11 @@ api_delete() {
 build_test_app_payload() {
   local branch_to_use="${TEST_APP_BRANCH}"
   local detected_branch=""
+  local dollar='$'
   detected_branch="$(detect_repo_default_branch "${TEST_APP_REPO}")"
   if [ -n "${detected_branch}" ] && [ "${TEST_APP_BRANCH}" = "main" ] && [ "${detected_branch}" != "main" ]; then
     branch_to_use="${detected_branch}"
-    echo "- detected default branch '${detected_branch}' for ${TEST_APP_REPO}; overriding TEST_APP_BRANCH=main"
+    echo "- detected default branch '${detected_branch}' for ${TEST_APP_REPO}; overriding TEST_APP_BRANCH=main" >&2
   fi
 
   cat <<JSON
@@ -207,11 +212,14 @@ build_test_app_payload() {
   "deploy_mode":"kubectl",
   "k8s_namespace":"${APPS_NS}",
   "k8s_service_account":"noppflow-runner",
-  "k8s_runner_image":"${RUNNER_IMAGE}",
+  "k8s_runner_image":"${RUNNER_IMAGE_JOB}",
   "deploy_manifest_path":"k8s/",
   "steps":[
-    {"name":"precheck","cmd":"echo deploying ${TEST_APP_NAME} && if [ -f k8s/deployment.yaml ]; then sed -i -E 's/^([[:space:]]*app:[[:space:]]*).*/\\\\1${TEST_APP_NAME}/' k8s/deployment.yaml; fi"},
-    {"name":"deploy","k8s_deploy":true}
+    {"name":"precheck","cmd":"echo deploying ${TEST_APP_NAME} && if [ -f k8s/deployment.yaml ]; then sed -i 's/app: .*/app: ${TEST_APP_NAME}/g' k8s/deployment.yaml; fi"},
+    {"name":"build_push","cmd":"IMAGE_TAG=run-${dollar}NOPPFLOW_RUN_ID; IMAGE_REF=${APP_RUNTIME_REGISTRY_ADDR}/${TEST_APP_NAME}:${dollar}IMAGE_TAG; test -f /workspace/repo/Dockerfile; echo building ${dollar}IMAGE_REF; kaniko-executor --context dir:///workspace/repo --dockerfile /workspace/repo/Dockerfile --destination ${dollar}IMAGE_REF --insecure --skip-tls-verify --insecure-pull && echo built ${dollar}IMAGE_REF"},
+    {"name":"deploy_apply","k8s_deploy":true},
+    {"name":"deploy_set_image","cmd":"kubectl -n ${APPS_NS} set image deploy/${TEST_APP_NAME} ${TEST_APP_NAME}=${APP_RUNTIME_REGISTRY_ADDR}/${TEST_APP_NAME}:run-${dollar}NOPPFLOW_RUN_ID"},
+    {"name":"deploy_rollout","cmd":"kubectl -n ${APPS_NS} rollout status deploy/${TEST_APP_NAME} --timeout=180s"}
   ]
 }
 JSON
@@ -508,6 +516,55 @@ echo "[7/10] Creating namespaces"
 kubectl get ns "${CONTROLLER_NS}" >/dev/null 2>&1 || kubectl create ns "${CONTROLLER_NS}"
 kubectl get ns "${APPS_NS}" >/dev/null 2>&1 || kubectl create ns "${APPS_NS}"
 
+if [ "${ENABLE_INCLUSTER_REGISTRY}" = "true" ]; then
+  echo "- ensuring in-cluster registry service (${INCLUSTER_REGISTRY_NAME}) in namespace ${APPS_NS}"
+  cat <<REGISTRY | kubectl -n "${APPS_NS}" apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${INCLUSTER_REGISTRY_NAME}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${INCLUSTER_REGISTRY_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${INCLUSTER_REGISTRY_NAME}
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              name: registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${INCLUSTER_REGISTRY_NAME}
+spec:
+  selector:
+    app: ${INCLUSTER_REGISTRY_NAME}
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: registry
+      protocol: TCP
+REGISTRY
+  kubectl -n "${APPS_NS}" rollout status deploy/"${INCLUSTER_REGISTRY_NAME}" --timeout=180s
+  if [ -z "${APP_RUNTIME_REGISTRY_ADDR}" ]; then
+    registry_cluster_ip="$(kubectl -n "${APPS_NS}" get svc "${INCLUSTER_REGISTRY_NAME}" -o jsonpath='{.spec.clusterIP}')"
+    APP_RUNTIME_REGISTRY_ADDR="${registry_cluster_ip}:5000"
+  fi
+else
+  if [ -z "${APP_RUNTIME_REGISTRY_ADDR}" ]; then
+    APP_RUNTIME_REGISTRY_ADDR="${REGISTRY_ADDR}"
+  fi
+fi
+
 echo "[8/10] Preparing database mode (${DB_MODE})"
 if [ "${DB_MODE}" = "mysql" ]; then
   kubectl -n "${CONTROLLER_NS}" apply -f k8s/mysql.kind.yaml
@@ -614,7 +671,9 @@ echo "- NoppFlow namespace: ${CONTROLLER_NS}"
 echo "- Apps namespace: ${APPS_NS}"
 echo "- App image: ${APP_IMAGE}"
 echo "- Runner image: ${RUNNER_IMAGE}"
+echo "- Runner image (job): ${RUNNER_IMAGE_JOB}"
 echo "- Registry address: ${REGISTRY_ADDR}"
+echo "- Runtime app registry: ${APP_RUNTIME_REGISTRY_ADDR}"
 echo
 echo "Access UI with:"
 echo "kubectl -n ${CONTROLLER_NS} port-forward svc/noppflow 8080:80"
@@ -623,7 +682,7 @@ echo
 echo "When creating an app with k8s_deploy, use:"
 echo "- k8s_namespace: ${APPS_NS}"
 echo "- k8s_service_account: noppflow-runner"
-echo "- k8s_runner_image: ${RUNNER_IMAGE}"
+echo "- k8s_runner_image: ${RUNNER_IMAGE_JOB}"
 if [ "${SEED_TEST_APP}" = "true" ]; then
   echo
   echo "Seeded test app:"

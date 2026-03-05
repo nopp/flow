@@ -699,6 +699,7 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 		_ = s.store.UpdateRunStatus(runID, "running", "")
 		onLogUpdate := func(log string) { _ = s.store.UpdateRunLog(runID, log) }
 		stepEnv := s.loadGlobalStepEnv()
+		stepEnv["NOPPFLOW_RUN_ID"] = strconv.FormatInt(runID, 10)
 		result := pipeline.Result{}
 		if appUsesK8sJob(appCopy) {
 			result = s.runAppAsK8sJob(runID, appCopy, privateKey, stepEnv, onLogUpdate)

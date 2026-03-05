@@ -18,6 +18,8 @@ Use the automated script to create a local kind cluster, local registry, build/p
 The script also:
 - forces `kubectl` context to `kind-<cluster-name>` (default: `kind-noppflow-local`)
 - loads images directly into kind nodes (`kind load docker-image`) as fallback for local runtime/registry quirks
+- creates an in-cluster registry service (`noppflow-registry`) used by app runtime build/push steps
+- seeds app jobs to use `RUNNER_IMAGE_JOB` (default: same value as `RUNNER_IMAGE`, com referência completa)
 
 By default, it also seeds a test app in NoppFlow:
 - name: `app-teste`
@@ -25,6 +27,11 @@ By default, it also seeds a test app in NoppFlow:
 - deploy mode: `kubectl` (namespace `apps`)
 - if `app-teste` already exists, it is updated to current bootstrap settings (including `k8s_runner_image`)
 - if `TEST_APP_BRANCH=main` but repo default branch is different, setup auto-detects and uses repo default branch
+- seeded pipeline includes build/push/deploy:
+  - build image with `kaniko-executor`
+  - push to in-cluster registry with tag `run-$NOPPFLOW_RUN_ID`
+  - `kubectl apply -f k8s/`
+  - `kubectl set image` + rollout status
 
 State reset:
 - by default, local bootstrap resets `noppflow` and `apps` namespaces each run (`RESET_DATABASE=true`)
@@ -42,6 +49,11 @@ To skip app seeding:
 ```bash
 SEED_TEST_APP=false ./k8s/setup-kind-local.sh
 ```
+
+Registry options:
+- `ENABLE_INCLUSTER_REGISTRY=true` (default) enables in-cluster runtime registry
+- `APP_RUNTIME_REGISTRY_ADDR=<host:port>` overrides where seeded app build/push publishes images
+- `RUNNER_IMAGE_JOB=<image:tag>` overrides runner image used by seeded app jobs
 
 Default local DB mode is `sqlite` for reliability in dev bootstrap.
 To force MySQL mode:
