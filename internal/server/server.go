@@ -670,18 +670,22 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "app not found"})
 		return
 	}
-	if strings.TrimSpace(app.SSHKeyName) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "app has no ssh_key_name configured"})
-		return
-	}
-	key, err := s.store.GetSSHKeyByName(app.SSHKeyName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	if key == nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "configured ssh_key_name not found"})
-		return
+	privateKey := ""
+	if repoNeedsSSH(strings.TrimSpace(app.Repo)) {
+		if strings.TrimSpace(app.SSHKeyName) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "app repo uses ssh and requires ssh_key_name"})
+			return
+		}
+		key, err := s.store.GetSSHKeyByName(app.SSHKeyName)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		if key == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "configured ssh_key_name not found"})
+			return
+		}
+		privateKey = key.PrivateKey
 	}
 
 	runID, err := s.store.CreateRun(appID, "", user.Username)
@@ -697,15 +701,19 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 		stepEnv := s.loadGlobalStepEnv()
 		result := pipeline.Result{}
 		if appUsesK8sJob(appCopy) {
-			result = s.runAppAsK8sJob(runID, appCopy, key.PrivateKey, stepEnv, onLogUpdate)
+			result = s.runAppAsK8sJob(runID, appCopy, privateKey, stepEnv, onLogUpdate)
 		} else {
-			keyPath, cleanupKey, err := writeTempSSHKey(key.PrivateKey)
-			if err != nil {
-				result = pipeline.Result{Success: false, Log: "failed to prepare ssh key"}
+			if privateKey == "" {
+				result = s.runner.Run(appCopy, pipeline.RunOptions{StepEnv: stepEnv}, onLogUpdate)
 			} else {
-				defer cleanupKey()
-				gitSSHCommand := buildGitSSHCommand(keyPath)
-				result = s.runner.Run(appCopy, pipeline.RunOptions{GitSSHCommand: gitSSHCommand, StepEnv: stepEnv}, onLogUpdate)
+				keyPath, cleanupKey, err := writeTempSSHKey(privateKey)
+				if err != nil {
+					result = pipeline.Result{Success: false, Log: "failed to prepare ssh key"}
+				} else {
+					defer cleanupKey()
+					gitSSHCommand := buildGitSSHCommand(keyPath)
+					result = s.runner.Run(appCopy, pipeline.RunOptions{GitSSHCommand: gitSSHCommand, StepEnv: stepEnv}, onLogUpdate)
+				}
 			}
 		}
 		status := "success"
@@ -716,6 +724,11 @@ func (s *Server) triggerRun(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{"run_id": runID, "status": "pending"})
+}
+
+func repoNeedsSSH(repo string) bool {
+	r := strings.ToLower(strings.TrimSpace(repo))
+	return strings.HasPrefix(r, "git@") || strings.HasPrefix(r, "ssh://")
 }
 
 func (s *Server) loadGlobalStepEnv() map[string]string {

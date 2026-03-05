@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -37,21 +38,27 @@ func (s *Server) runAppAsK8sJob(runID int64, app config.App, privateKey string, 
 	if runnerImage == "" {
 		return pipeline.Result{Success: false, Log: "k8s runner image is required"}
 	}
+	if err := ensureKubectlPresent(); err != nil {
+		return pipeline.Result{Success: false, Log: err.Error()}
+	}
 
 	jobName := fmt.Sprintf("noppflow-run-%d", runID)
 	secretName := jobName + "-ssh"
-	script := buildK8sJobScript(app, stepEnv)
+	useSSHKey := strings.TrimSpace(privateKey) != ""
+	script := buildK8sJobScript(app, stepEnv, useSSHKey)
 	if strings.TrimSpace(script) == "" {
 		return pipeline.Result{Success: false, Log: "empty k8s job script"}
 	}
 
-	secretYAML := buildK8sRunSecretYAML(namespace, secretName, privateKey)
-	if err := kubectlApplyYAML(secretYAML); err != nil {
-		return pipeline.Result{Success: false, Log: fmt.Sprintf("failed to create ssh secret: %v", err)}
+	if useSSHKey {
+		secretYAML := buildK8sRunSecretYAML(namespace, secretName, privateKey)
+		if err := kubectlApplyYAML(secretYAML); err != nil {
+			return pipeline.Result{Success: false, Log: fmt.Sprintf("failed to create ssh secret: %v", err)}
+		}
+		defer func() { _ = kubectlDeleteResource(namespace, "secret", secretName) }()
 	}
-	defer func() { _ = kubectlDeleteResource(namespace, "secret", secretName) }()
 
-	jobYAML := buildK8sRunJobYAML(namespace, jobName, serviceAccount, runnerImage, secretName, script)
+	jobYAML := buildK8sRunJobYAML(namespace, jobName, serviceAccount, runnerImage, secretName, script, useSSHKey)
 	if err := kubectlApplyYAML(jobYAML); err != nil {
 		return pipeline.Result{Success: false, Log: fmt.Sprintf("failed to create job: %v", err)}
 	}
@@ -90,6 +97,13 @@ func (s *Server) runAppAsK8sJob(runID int64, app config.App, privateKey string, 
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+func ensureKubectlPresent() error {
+	if _, err := exec.LookPath("kubectl"); err != nil {
+		return fmt.Errorf("kubectl is required in noppflow api container but was not found in PATH=%s", os.Getenv("PATH"))
+	}
+	return nil
 }
 
 func kubectlApplyYAML(yamlBody string) error {
@@ -163,7 +177,21 @@ data:
 `, secretName, namespace, encoded)
 }
 
-func buildK8sRunJobYAML(namespace, jobName, serviceAccount, image, secretName, script string) string {
+func buildK8sRunJobYAML(namespace, jobName, serviceAccount, image, secretName, script string, useSSHKey bool) string {
+	volumeMounts := ""
+	volumes := ""
+	if useSSHKey {
+		volumeMounts = `          volumeMounts:
+            - name: ssh-key
+              mountPath: /var/run/noppflow-ssh
+              readOnly: true
+`
+		volumes = fmt.Sprintf(`      volumes:
+        - name: ssh-key
+          secret:
+            secretName: %s
+`, secretName)
+	}
 	return fmt.Sprintf(`apiVersion: batch/v1
 kind: Job
 metadata:
@@ -188,26 +216,23 @@ spec:
             - -c
             - |
 %s
-          volumeMounts:
-            - name: ssh-key
-              mountPath: /var/run/noppflow-ssh
-              readOnly: true
-      volumes:
-        - name: ssh-key
-          secret:
-            secretName: %s
-`, jobName, namespace, serviceAccount, image, indentYAMLBlock(script, 14), secretName)
+%s%s`, jobName, namespace, serviceAccount, image, indentYAMLBlock(script, 14), volumeMounts, volumes)
 }
 
-func buildK8sJobScript(app config.App, stepEnv map[string]string) string {
+func buildK8sJobScript(app config.App, stepEnv map[string]string, useSSHKey bool) string {
 	steps := app.EffectiveSteps()
 	lines := []string{
 		"set -eu",
 		"mkdir -p /workspace",
 		"cd /workspace",
-		fmt.Sprintf("export GIT_SSH_COMMAND=%s", shellQuote("ssh -i /var/run/noppflow-ssh/id_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new")),
+		"export GIT_TERMINAL_PROMPT=0",
 		fmt.Sprintf("git clone --branch %s --single-branch %s repo", shellQuote(app.Branch), shellQuote(app.Repo)),
 		"cd repo",
+	}
+	if useSSHKey {
+		lines[3] = fmt.Sprintf("export GIT_SSH_COMMAND=%s", shellQuote("ssh -i /var/run/noppflow-ssh/id_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"))
+	} else {
+		lines = append(lines[:3], lines[4:]...)
 	}
 	for k, v := range stepEnv {
 		name := strings.TrimSpace(k)

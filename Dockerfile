@@ -14,7 +14,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /out/cicd ./cmd/cicd
 
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates git openssh-client curl && update-ca-certificates
+RUN apk add --no-cache ca-certificates git openssh-client curl kubectl && update-ca-certificates
 
 WORKDIR /app
 

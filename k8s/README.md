@@ -15,6 +15,34 @@ Use the automated script to create a local kind cluster, local registry, build/p
 ./k8s/setup-kind-local.sh
 ```
 
+The script also:
+- forces `kubectl` context to `kind-<cluster-name>` (default: `kind-noppflow-local`)
+- loads images directly into kind nodes (`kind load docker-image`) as fallback for local runtime/registry quirks
+
+By default, it also seeds a test app in NoppFlow:
+- name: `app-teste`
+- repo: `https://github.com/nopp/app-teste.git`
+- deploy mode: `kubectl` (namespace `apps`)
+- if `app-teste` already exists, it is updated to current bootstrap settings (including `k8s_runner_image`)
+- if `TEST_APP_BRANCH=main` but repo default branch is different, setup auto-detects and uses repo default branch
+
+State reset:
+- by default, local bootstrap resets `noppflow` and `apps` namespaces each run (`RESET_DATABASE=true`)
+- this guarantees a fresh database and avoids accumulating duplicate test apps/runs
+- to keep existing state:
+  - `RESET_DATABASE=false ./k8s/setup-kind-local.sh`
+
+Image tags:
+- script uses a unique `APP_IMAGE_TAG` per run (timestamp-based) to avoid stale `:kind` image reuse in local clusters
+- override if needed:
+  - `APP_IMAGE_TAG=mytag ./k8s/setup-kind-local.sh`
+
+To skip app seeding:
+
+```bash
+SEED_TEST_APP=false ./k8s/setup-kind-local.sh
+```
+
 Default local DB mode is `sqlite` for reliability in dev bootstrap.
 To force MySQL mode:
 
@@ -38,7 +66,7 @@ KIND_NODE_IMAGE=kindest/node:v1.30.8 CONTAINER_CLI=podman ./k8s/setup-kind-local
 ```
 
 Requirements:
-- Docker
+- Docker or Podman
 - kind
 - kubectl
 

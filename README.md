@@ -202,6 +202,19 @@ Important behavior:
 - `make build` — build binary to `bin/cicd`
 - `make test` — run tests
 - `make tidy` — `go mod tidy`
+- `make kind-up-local` — bootstrap local kind environment for end-to-end testing
+- `make kind-up-local-podman` — same bootstrap flow using Podman
+
+## Local Kubernetes Testing
+
+Use `k8s/setup-kind-local.sh` (or the make targets above) to create a full local test environment with kind:
+- local registry
+- `noppflow` + `noppflow-runner` images build/push
+- namespaces and RBAC
+- NoppFlow deploy + service
+- seeded test app (`app-teste`)
+
+See [k8s/README.md](k8s/README.md) for all options (`RESET_DATABASE`, `SEED_TEST_APP`, `APP_IMAGE_TAG`, Podman settings).
 
 ## Flags
 

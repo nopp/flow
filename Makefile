@@ -1,4 +1,4 @@
-.PHONY: run run-dev run-prod build test tidy
+.PHONY: run run-dev run-prod build test tidy kind-up-local kind-up-local-podman
 
 run: run-dev
 
@@ -22,3 +22,14 @@ test:
 
 tidy:
 	go mod tidy
+
+# Bootstrap local kind + registry + noppflow + runner + optional seeded app
+# Optional overrides:
+#   DB_MODE=mysql make kind-up-local
+#   SEED_TEST_APP=false make kind-up-local
+kind-up-local:
+	./k8s/setup-kind-local.sh
+
+# Same bootstrap flow using Podman runtime
+kind-up-local-podman:
+	CONTAINER_CLI=podman ./k8s/setup-kind-local.sh

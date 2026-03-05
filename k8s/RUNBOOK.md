@@ -10,7 +10,7 @@ This runbook covers day-to-day operation of ephemeral Job runs (`k8s_deploy`) in
 - RBAC applied for controller (namespace-scoped recommended).
 - Runner ServiceAccount + RBAC applied in target app namespaces.
 - App has valid fields:
-  - `ssh_key_name`
+  - `ssh_key_name` (required only for SSH repos like `git@...` / `ssh://`)
   - `deploy_mode` (`kubectl` or `helm`)
   - `k8s_namespace`
   - `k8s_service_account`
@@ -106,6 +106,8 @@ Checks:
 
 Fix:
 - rotate/recreate SSH key in NoppFlow and re-save app config.
+
+For HTTPS public repos, `ssh_key_name` is not required. If clone fails with auth prompts, verify repository URL/access and branch.
 
 ## 5.4 Deploy step (`k8s_deploy`) fails
 
