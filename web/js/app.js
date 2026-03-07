@@ -1,4 +1,55 @@
 const API = '/api';
+const THEME_STORAGE_KEY = 'noppflow-theme';
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  const finalTheme = theme === 'dark' ? 'dark' : 'light';
+  root.setAttribute('data-theme', finalTheme);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, finalTheme);
+  } catch (_) {}
+  const themeBtn = document.getElementById('theme-toggle-btn');
+  if (themeBtn) {
+    themeBtn.textContent = finalTheme === 'dark' ? 'Light mode' : 'Dark mode';
+  }
+}
+
+function getPreferredTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === 'dark' || saved === 'light') return saved;
+  } catch (_) {}
+  return 'light';
+}
+
+function ensureThemeToggleButton() {
+  const actions = document.querySelector('.header-actions');
+  if (!actions) {
+    if (document.getElementById('theme-toggle-btn')) return;
+    const floating = document.createElement('button');
+    floating.type = 'button';
+    floating.id = 'theme-toggle-btn';
+    floating.className = 'btn btn-ghost theme-toggle-floating';
+    document.body.appendChild(floating);
+    floating.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+    });
+    applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
+    return;
+  }
+  if (document.getElementById('theme-toggle-btn')) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'theme-toggle-btn';
+  btn.className = 'btn btn-ghost';
+  actions.insertBefore(btn, actions.firstChild);
+  btn.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+  applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
+}
 
 async function fetchApi(path, options = {}) {
   const headers = options.headers || {};
@@ -454,7 +505,9 @@ function escapeHtml(s) {
 }
 
 function renderRuns(container, runs, total, page) {
-  stopInlineLogPolling();
+  if (expandedRunId == null) {
+    stopInlineLogPolling();
+  }
   const list = Array.isArray(runs) ? runs : [];
   const totalCount = typeof total === 'number' ? total : list.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / RUNS_PAGE_SIZE));
@@ -535,9 +588,9 @@ function renderRuns(container, runs, total, page) {
   }
 
   const hasRunning = list.some(r => r.status === 'pending' || r.status === 'running');
-  if (hasRunning && !runsListPollInterval) {
+  if (hasRunning && expandedRunId == null && !runsListPollInterval) {
     runsListPollInterval = setInterval(loadRuns, RUNS_LIST_POLL_MS);
-  } else if (!hasRunning) {
+  } else if (!hasRunning || expandedRunId != null) {
     stopRunsListPolling();
   }
 }
@@ -572,25 +625,38 @@ async function toggleRunLogInline(runId) {
   if (isExpanded) {
     logRow.hidden = true;
     expandBtn.textContent = '▶';
-    if (expandedRunId === runId) stopInlineLogPolling();
+    if (expandedRunId === runId) {
+      stopInlineLogPolling();
+      loadRuns();
+    }
     return;
   }
 
   stopInlineLogPolling();
+  stopRunsListPolling();
   logRow.hidden = false;
   expandBtn.textContent = '▼';
   expandedRunId = runId;
 
-  const pre = logRow.querySelector('.run-log-inline-content');
   async function refreshInlineLog() {
-    if (!document.getElementById(`run-log-${runId}`)) {
+    const currentLogRow = document.getElementById(`run-log-${runId}`);
+    if (!currentLogRow) {
+      stopInlineLogPolling();
+      return;
+    }
+    const currentPre = currentLogRow.querySelector('.run-log-inline-content');
+    if (!currentPre) {
       stopInlineLogPolling();
       return;
     }
     try {
       const run = await getRun(runId);
-      pre.textContent = run.log || '(no log yet)';
-      if (run.status === 'success' || run.status === 'failed') stopInlineLogPolling();
+      currentPre.textContent = run.log || '(no log yet)';
+      scrollLogToBottom(currentPre);
+      if (run.status === 'success' || run.status === 'failed') {
+        stopInlineLogPolling();
+        loadRuns();
+      }
     } catch (_) {}
   }
   await refreshInlineLog();
@@ -607,6 +673,15 @@ const logClose = document.getElementById('log-close');
 let logPollInterval = null;
 const LOG_POLL_MS = 1500;
 
+function scrollLogToBottom(el) {
+  if (!el) return;
+  el.scrollTop = el.scrollHeight;
+  const scrollParent = el.closest('.run-log-inline');
+  if (scrollParent) {
+    scrollParent.scrollTop = scrollParent.scrollHeight;
+  }
+}
+
 function stopLogPolling() {
   if (logPollInterval) {
     clearInterval(logPollInterval);
@@ -616,7 +691,10 @@ function stopLogPolling() {
 
 function updateLogFromRun(run) {
   if (logTitle) logTitle.textContent = `Run #${run.id} · ${run.app_id} · ${run.status}${run.status === 'running' || run.status === 'pending' ? ' ● Live' : ''}`;
-  if (logContent) logContent.textContent = run.log || '(no log yet)';
+  if (logContent) {
+    logContent.textContent = run.log || '(no log yet)';
+    scrollLogToBottom(logContent);
+  }
   if (run.status === 'success' || run.status === 'failed') {
     stopLogPolling();
   }
@@ -1806,6 +1884,8 @@ async function ensureAuthenticated() {
 }
 
 async function init() {
+  applyTheme(getPreferredTheme());
+  ensureThemeToggleButton();
   const reachable = await checkServerReachable();
   if (!reachable) {
     showServerUnreachableMessage();
@@ -1814,6 +1894,7 @@ async function init() {
   if (await initLoginPage()) return;
   const me = await ensureAuthenticated();
   if (!me) return;
+  ensureThemeToggleButton();
   bindHeaderUser(me);
   const isAccessPage = !!document.getElementById('groups-container');
   const isGroupPage = !!document.getElementById('group-title');
