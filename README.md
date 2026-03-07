@@ -58,6 +58,17 @@ Main pages:
 - `/group.html?group_id=<id>` — admin-only group detail editor (members and apps)
 - `/docs.html` — project docs page
 
+Frontend stack:
+- Static HTML pages
+- Custom CSS (`web/css/style.css`)
+- Vanilla JavaScript (`web/js/app.js`)
+- No UI/layout framework (no React/Vue/Bootstrap/Tailwind UI)
+
+Layout notes:
+- Custom control-plane style dashboard (inspired by DevOps UIs).
+- Light/dark theme toggle with local persistence.
+- Shared sidebar/header navigation across main pages.
+
 Notes:
 - The `Access` link is hidden for non-admin users.
 - If a non-admin directly opens admin-only pages, content is not shown.
@@ -86,6 +97,13 @@ For `k8s_deploy` steps, app deploy settings are used and NoppFlow runs an epheme
 - `deploy_manifest_path` (required for `kubectl`)
 - `helm_chart` (required for `helm`)
 - optional `helm_values_path`
+
+Recent runs live UX:
+- Runs list auto-refreshes while there are active runs.
+- Expanded inline log auto-follows newest lines during execution.
+- After run completion, inline log stays open (no auto-collapse).
+- Expanded run shows a step flow rail (waiting/running/success/failed).
+- Step flow rail is sticky at the top of the log panel while log scrolls.
 
 ## App Configuration
 
@@ -231,6 +249,8 @@ When running `bin/cicd` or `go run ./cmd/cicd`:
 
 - [CODE.md](CODE.md) — package/file/function reference
 - [k8s/RUNBOOK.md](k8s/RUNBOOK.md) — Kubernetes operations runbook (ephemeral Jobs)
+- [k8s/APP-K8S-PASSO-A-PASSO.md](k8s/APP-K8S-PASSO-A-PASSO.md) — detailed PT-BR walkthrough to register an app and deploy to Kubernetes
+- [k8s/APP-K8S-STEP-BY-STEP.md](k8s/APP-K8S-STEP-BY-STEP.md) — detailed English walkthrough to register an app and deploy to Kubernetes
 - `/docs.html` — architecture and API docs in the web UI
 
 ## Screenshots

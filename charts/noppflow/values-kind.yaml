@@ -1,0 +1,35 @@
+# Values tuned for local kind environments.
+
+replicaCount: 1
+
+image:
+  repository: localhost:5001/noppflow
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+rbac:
+  create: true
+  scope: namespace
+  targetNamespace: apps
+
+env:
+  db:
+    driver: sqlite3
+    existingSecret: ""
+    createSecret: false
+    dsn: ""
+  admin:
+    username: admin
+    password: admin
+
+# Keep local state simple by default (ephemeral data/work).
+persistence:
+  enabled: false
+
+ingress:
+  enabled: false

@@ -34,6 +34,13 @@
         <h2>Overview</h2>
         <p>NoppFlow is a lightweight CI/CD server in Go with group-based app access, authentication, and a static web UI.</p>
 
+        <h2>Frontend</h2>
+        <ul>
+          <li>Static HTML + custom CSS + vanilla JavaScript.</li>
+          <li>No UI framework (no React/Vue/Bootstrap/Tailwind UI).</li>
+          <li>Control-plane style custom layout with light/dark mode toggle.</li>
+        </ul>
+
         <h2>Authentication</h2>
         <ul>
           <li>Login required for API usage and protected UI features.</li>
@@ -69,6 +76,15 @@
           <li>When an app includes <code>k8s_deploy</code>, NoppFlow creates an ephemeral Kubernetes Job in the configured namespace and streams pod logs back to the run.</li>
           <li>Admin-managed global env vars are injected into all step executions and can be used in command/script steps.</li>
           <li>Global env vars UI masks values by default and supports edit/delete for admins.</li>
+        </ul>
+
+        <h2>Recent Runs Live View</h2>
+        <ul>
+          <li>Runs list auto-refreshes while there are active runs.</li>
+          <li>Expanded inline log auto-follows newest lines during run execution.</li>
+          <li>When a run finishes, its expanded inline log remains open.</li>
+          <li>Each expanded run displays a step flow rail with step states (<code>waiting</code>, <code>running</code>, <code>success</code>, <code>failed</code>).</li>
+          <li>The step flow rail is sticky at the top while log content scrolls.</li>
         </ul>
 
         <h2>API</h2>

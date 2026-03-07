@@ -1,0 +1,86 @@
+replicaCount: 1
+
+image:
+  repository: localhost:5001/noppflow
+  tag: latest
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+rbac:
+  create: true
+  # namespace | cluster
+  scope: namespace
+  # Used when rbac.scope=namespace. This is where ephemeral runner Jobs/Secrets are created.
+  targetNamespace: apps
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: noppflow.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+env:
+  db:
+    # sqlite3 | mysql
+    driver: sqlite3
+    # Option 1: use existing secret with key env.db.secretKey (recommended for mysql)
+    existingSecret: ""
+    secretKey: dsn
+    # Option 2: create secret from plaintext dsn in values (not recommended for prod)
+    createSecret: false
+    dsn: ""
+  admin:
+    username: ""
+    password: ""
+  extra: []
+
+persistence:
+  enabled: false
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  dataSubPath: data
+  workSubPath: work
+
+appConfig:
+  create: false
+  # If create=true, this content is mounted as /app/config/apps.yaml
+  content: |
+    apps: []

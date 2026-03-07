@@ -1,0 +1,11 @@
+{{- if .Values.appConfig.create }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "noppflow.fullname" . }}-config
+  labels:
+    {{- include "noppflow.labels" . | nindent 4 }}
+data:
+  apps.yaml: |
+{{ .Values.appConfig.content | indent 4 }}
+{{- end }}

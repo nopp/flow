@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "noppflow.fullname" . }}
+  labels:
+    {{- include "noppflow.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "noppflow.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        checksum/config: {{ toYaml .Values.appConfig | sha256sum }}
+      labels:
+        {{- include "noppflow.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "noppflow.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: noppflow
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: DB_DRIVER
+              value: {{ .Values.env.db.driver | quote }}
+            {{- $dbSecretName := .Values.env.db.existingSecret }}
+            {{- if and (not $dbSecretName) .Values.env.db.createSecret }}
+            {{- $dbSecretName = printf "%s-db" (include "noppflow.fullname" .) }}
+            {{- end }}
+            {{- if $dbSecretName }}
+            - name: DB_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $dbSecretName }}
+                  key: {{ .Values.env.db.secretKey }}
+            {{- else if .Values.env.db.dsn }}
+            - name: DB_DSN
+              value: {{ .Values.env.db.dsn | quote }}
+            {{- end }}
+            {{- if .Values.env.admin.username }}
+            - name: ADMIN_USERNAME
+              value: {{ .Values.env.admin.username | quote }}
+            {{- end }}
+            {{- if .Values.env.admin.password }}
+            - name: ADMIN_PASSWORD
+              value: {{ .Values.env.admin.password | quote }}
+            {{- end }}
+            {{- with .Values.env.extra }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+              {{- if .Values.persistence.enabled }}
+              subPath: {{ .Values.persistence.dataSubPath }}
+              {{- end }}
+            - name: work
+              mountPath: /app/work
+              {{- if .Values.persistence.enabled }}
+              subPath: {{ .Values.persistence.workSubPath }}
+              {{- end }}
+            {{- if .Values.appConfig.create }}
+            - name: config
+              mountPath: /app/config/apps.yaml
+              subPath: apps.yaml
+            {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "noppflow.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: work
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "noppflow.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if .Values.appConfig.create }}
+        - name: config
+          configMap:
+            name: {{ include "noppflow.fullname" . }}-config
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

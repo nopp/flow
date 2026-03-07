@@ -1,0 +1,6 @@
+apiVersion: v2
+name: noppflow
+description: Lightweight CI/CD server (Go) with group-based access and Kubernetes ephemeral job support.
+type: application
+version: 0.1.0
+appVersion: "latest"

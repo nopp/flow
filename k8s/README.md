@@ -108,6 +108,41 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
+## Helm chart (recommended for reusable installs)
+
+A Helm chart is available at `charts/noppflow`.
+
+Install with defaults (SQLite):
+
+```bash
+helm upgrade --install noppflow ./charts/noppflow \
+  --namespace noppflow \
+  --create-namespace
+```
+
+Install with MySQL secret:
+
+```bash
+kubectl -n noppflow create secret generic noppflow-db \
+  --from-literal=dsn='user:password@tcp(mysql-host:3306)/noppflow?parseTime=true'
+
+helm upgrade --install noppflow ./charts/noppflow \
+  --namespace noppflow \
+  --create-namespace \
+  --set env.db.driver=mysql \
+  --set env.db.existingSecret=noppflow-db
+```
+
+RBAC scope options:
+
+```bash
+# namespace scoped (default)
+--set rbac.scope=namespace --set rbac.targetNamespace=apps
+
+# cluster wide
+--set rbac.scope=cluster
+```
+
 ## 3. Access
 
 The Service exposes NoppFlow on port 80 (ClusterIP). To access from outside the cluster, use a port-forward or add an Ingress:
@@ -169,3 +204,5 @@ kubectl apply -f k8s/runner-job.example.yaml
 Operational checklist and troubleshooting:
 
 - `k8s/RUNBOOK.md`
+- `k8s/APP-K8S-PASSO-A-PASSO.md` (PT-BR end-to-end guide for app registration + deploy)
+- `k8s/APP-K8S-STEP-BY-STEP.md` (EN end-to-end guide for app registration + deploy)
