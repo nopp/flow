@@ -376,13 +376,84 @@ body {
 }
 
 .run-log-inline {
-  padding: 0.75rem 1rem;
+  padding: 0;
   max-height: 280px;
   overflow: auto;
 }
 
+.run-steps-inline {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.steps-flow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.step-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.32rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  background: color-mix(in srgb, var(--bg-card) 75%, var(--bg));
+}
+
+.step-chip-name {
+  font-weight: 600;
+}
+
+.step-chip-state {
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  opacity: 0.9;
+}
+
+.step-chip-arrow {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.step-chip-waiting {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-hover) 70%, var(--bg));
+}
+
+.step-chip-running {
+  color: var(--running);
+  border-color: color-mix(in srgb, var(--running) 45%, var(--border));
+  background: color-mix(in srgb, var(--running) 14%, var(--bg-card));
+  animation: stepPulse 1.4s ease-in-out infinite;
+}
+
+.step-chip-success {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 14%, var(--bg-card));
+}
+
+.step-chip-failed {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, var(--border));
+  background: color-mix(in srgb, var(--error) 14%, var(--bg-card));
+}
+
 .run-log-inline-content {
   margin: 0;
+  padding: 0.6rem 1rem 1rem;
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
   line-height: 1.4;
@@ -1162,6 +1233,11 @@ select.form-input:focus {
   }
 }
 
+@keyframes stepPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.0); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.08); }
+}
+
 @media (max-width: 520px) {
   .app-card .card-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1169,6 +1245,15 @@ select.form-input:focus {
 
   .app-card .card-actions .btn-run {
     grid-column: 1 / -1;
+  }
+
+  .step-chip {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .step-chip-arrow {
+    display: none;
   }
 }
 

@@ -622,6 +622,7 @@ function renderRuns(container, runs, total, page) {
           <tr class="run-log-row" id="run-log-${run.id}" data-run-id="${run.id}" hidden>
             <td colspan="7">
               <div class="run-log-inline">
+                <div class="run-steps-inline" hidden></div>
                 <pre class="run-log-inline-content">${escapeHtml(run.log || '(no log yet)')}</pre>
               </div>
             </td>
@@ -671,6 +672,8 @@ function stopRunsListPolling() {
 
 let inlineLogPollInterval = null;
 let expandedRunId = null;
+const appStepsCache = new Map();
+const appStepsPending = new Map();
 
 function stopInlineLogPolling() {
   if (inlineLogPollInterval) {
@@ -685,6 +688,119 @@ function clearInlineLogPollingTimer() {
     clearInterval(inlineLogPollInterval);
     inlineLogPollInterval = null;
   }
+}
+
+function stripAnsi(text) {
+  return String(text || '').replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function parseRunStepProgress(logText, runStatus) {
+  const statusByName = new Map();
+  const seen = new Set();
+  const order = [];
+  let current = '';
+  const lines = stripAnsi(logText).split('\n');
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const startMatch = line.match(/^=== Step:\s*(.+?)\s*===$/);
+    if (startMatch) {
+      const name = startMatch[1].trim();
+      if (!seen.has(name)) {
+        order.push(name);
+        seen.add(name);
+      }
+      statusByName.set(name, 'running');
+      current = name;
+      continue;
+    }
+    const okMatch = line.match(/^(.+?) step OK$/);
+    if (okMatch) {
+      const name = okMatch[1].trim();
+      if (!seen.has(name)) {
+        order.push(name);
+        seen.add(name);
+      }
+      statusByName.set(name, 'success');
+      if (current === name) current = '';
+      continue;
+    }
+    const failMatch = line.match(/^(.+?) step failed:/);
+    if (failMatch) {
+      const name = failMatch[1].trim();
+      if (!seen.has(name)) {
+        order.push(name);
+        seen.add(name);
+      }
+      statusByName.set(name, 'failed');
+      if (current === name) current = '';
+    }
+  }
+
+  if (runStatus === 'failed') {
+    for (const [name, status] of statusByName.entries()) {
+      if (status === 'running') {
+        statusByName.set(name, 'failed');
+        break;
+      }
+    }
+  }
+  if (runStatus === 'success') {
+    for (const [name, status] of statusByName.entries()) {
+      if (status === 'running') {
+        statusByName.set(name, 'success');
+      }
+    }
+  }
+
+  return { order, statusByName };
+}
+
+async function getAppStepNamesCached(appId) {
+  if (!appId) return [];
+  if (appStepsCache.has(appId)) return appStepsCache.get(appId);
+  if (appStepsPending.has(appId)) return appStepsPending.get(appId);
+
+  const pending = (async () => {
+    try {
+      const app = await getApp(appId);
+      const steps = Array.isArray(app.steps) ? app.steps : [];
+      const names = steps.map(s => String(s && s.name ? s.name : '').trim()).filter(Boolean);
+      appStepsCache.set(appId, names);
+      return names;
+    } catch (_) {
+      appStepsCache.set(appId, []);
+      return [];
+    } finally {
+      appStepsPending.delete(appId);
+    }
+  })();
+
+  appStepsPending.set(appId, pending);
+  return pending;
+}
+
+function renderInlineRunSteps(run, stepNames, targetEl) {
+  if (!targetEl) return;
+  const progress = parseRunStepProgress(run.log || '', run.status);
+  const names = Array.isArray(stepNames) && stepNames.length ? stepNames : progress.order;
+  if (!names.length) {
+    targetEl.innerHTML = '';
+    targetEl.hidden = true;
+    return;
+  }
+
+  const parts = [];
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i];
+    const state = progress.statusByName.get(name) || 'waiting';
+    parts.push(`<div class="step-chip step-chip-${state}"><span class="step-chip-name">${escapeHtml(name)}</span><span class="step-chip-state">${state}</span></div>`);
+    if (i < names.length - 1) {
+      parts.push('<span class="step-chip-arrow" aria-hidden="true">→</span>');
+    }
+  }
+  targetEl.innerHTML = `<div class="steps-flow">${parts.join('')}</div>`;
+  targetEl.hidden = false;
 }
 
 async function toggleRunLogInline(runId) {
@@ -724,6 +840,9 @@ async function toggleRunLogInline(runId) {
       currentPre.textContent = run.log || '(no log yet)';
       scrollLogToBottom(currentPre);
       updateRunRowStatus(run);
+      const stepsBox = currentLogRow.querySelector('.run-steps-inline');
+      const stepNames = await getAppStepNamesCached(run.app_id);
+      renderInlineRunSteps(run, stepNames, stepsBox);
       if (run.status === 'success' || run.status === 'failed') {
         clearInlineLogPollingTimer();
       }
