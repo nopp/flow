@@ -83,6 +83,9 @@ body {
 }
 
 .current-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.9rem;
   color: var(--text-muted);
   text-decoration: none;
@@ -172,25 +175,16 @@ body {
 }
 
 .app-card .card-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
   margin-top: 1rem;
 }
 
 .app-card .card-actions .btn {
-  flex: 1;
+  width: 100%;
   min-width: 0;
-}
-
-.app-card .card-actions .btn-run {
-  flex: 1 1 auto;
-}
-
-.app-card .card-actions .btn-edit,
-.app-card .card-actions .btn-delete {
-  flex: 0 0 auto;
-  padding: 0.5rem 0.75rem;
+  justify-content: center;
 }
 
 .app-card .btn-delete {
@@ -213,8 +207,33 @@ body {
   font-weight: 500;
   border: none;
   border-radius: 8px;
+  text-decoration: none;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
+}
+
+.btn .btn-icon-svg,
+.current-user .btn-icon-svg {
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn .btn-icon-svg svg,
+.current-user .btn-icon-svg svg {
+  width: 1rem;
+  height: 1rem;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.btn .btn-label {
+  line-height: 1;
 }
 
 .btn-primary {
@@ -862,29 +881,38 @@ body {
 }
 
 .app {
-  max-width: 1240px;
-  padding: 1.6rem 1.25rem 2rem;
+  max-width: none;
+  min-height: 100vh;
+  padding: 1rem 1rem 1rem 19rem;
 }
 
 .header {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  bottom: 1rem;
+  width: 16.5rem;
+  margin: 0;
   background: color-mix(in srgb, var(--bg-card) 86%, transparent);
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) + 2px);
-  padding: 1rem 1.2rem;
-  margin-bottom: 1.35rem;
+  padding: 0.9rem;
   backdrop-filter: blur(8px);
   box-shadow: var(--shadow);
+  z-index: 20;
 }
 
 .logo {
   color: var(--text);
   background: none;
   -webkit-text-fill-color: initial;
-  font-size: 1.5rem;
+  font-size: 1.35rem;
+  line-height: 1.2;
 }
 
 .tagline {
-  font-size: 0.82rem;
+  font-size: 0.77rem;
+  margin-top: 0.35rem;
 }
 
 .main,
@@ -892,9 +920,62 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.main {
+  max-width: 1320px;
+}
+
+.header-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  height: 100%;
+  gap: 0.85rem;
+}
+
+.header-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.header-nav .btn {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.header-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+
+.current-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-card) 70%, var(--bg));
+}
+
 .section-title {
   font-size: 1.22rem;
   letter-spacing: 0.01em;
+}
+
+.section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.section-subtitle {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .btn {
@@ -962,7 +1043,8 @@ body {
 
 .runs-table th,
 .runs-table td {
-  padding: 0.82rem 0.95rem;
+  padding: 0.66rem 0.82rem;
+  font-size: 0.86rem;
 }
 
 .run-log-inline {
@@ -975,6 +1057,22 @@ body {
 .log-content {
   font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, monospace;
   font-size: 0.79rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.status-dot {
+  width: 0.44rem;
+  height: 0.44rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.95;
 }
 
 .form-input,
@@ -1064,14 +1162,47 @@ select.form-input:focus {
   }
 }
 
+@media (max-width: 520px) {
+  .app-card .card-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-card .card-actions .btn-run {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 900px) {
+  .app {
+    padding: 1rem;
+  }
+  .header {
+    position: static;
+    width: auto;
+    margin-bottom: 1rem;
+  }
   .header-row {
     gap: 0.75rem;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
   .header-nav,
   .header-actions {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 0;
+  }
+  .header-nav .btn {
+    width: auto;
+  }
+  .current-user {
+    display: inline-block;
+    padding: 0.35rem 0.5rem;
   }
 }

@@ -1,5 +1,51 @@
 const API = '/api';
 const THEME_STORAGE_KEY = 'noppflow-theme';
+const UI_ICONS = {
+  runs: '<svg viewBox="0 0 24 24" fill="none"><path d="M3 12h6M3 6h12M3 18h10M17 14l4 4m0 0l-4 4m4-4h-9"/></svg>',
+  apps: '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>',
+  access: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.2-2.8 8-7 9-4.2-1-7-4.8-7-9V6l7-3Z"/><path d="M9.5 12.5l1.8 1.8 3.7-3.7"/></svg>',
+  docs: '<svg viewBox="0 0 24 24" fill="none"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3V4Z"/><path d="M8 8h7M8 12h7M8 16h5"/></svg>',
+  logout: '<svg viewBox="0 0 24 24" fill="none"><path d="M10 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M15 16l5-4-5-4"/><path d="M20 12H9"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 1 0 2 5.3"/><path d="M20 4v7h-7"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="none"><path d="M8 6v12l10-6-10-6Z"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none"><path d="m4 20 4.5-1 9.7-9.7a2.1 2.1 0 0 0 0-3L17.7 4a2.1 2.1 0 0 0-3 0L5 13.7 4 18.2V20Z"/><path d="m13.8 5.8 4.4 4.4"/></svg>',
+  delete: '<svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>',
+  sun: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>',
+};
+
+function iconMarkup(name) {
+  const svg = UI_ICONS[name];
+  if (!svg) return '';
+  return `<span class="btn-icon-svg" aria-hidden="true">${svg}</span>`;
+}
+
+function setButtonWithIcon(el, iconName, label) {
+  if (!el || el.dataset.iconApplied === '1') return;
+  el.innerHTML = `${iconMarkup(iconName)}<span class="btn-label">${escapeHtml(label)}</span>`;
+  el.dataset.iconApplied = '1';
+}
+
+function decorateHeaderButtonIcons() {
+  const navMap = {
+    '/': { icon: 'runs', label: 'Recent runs' },
+    '/apps.html': { icon: 'apps', label: 'Apps' },
+    '/access.html': { icon: 'access', label: 'Access' },
+    '/docs.html': { icon: 'docs', label: 'Docs' },
+  };
+  document.querySelectorAll('.header-nav a.btn').forEach((a) => {
+    const href = (a.getAttribute('href') || '').split('?')[0];
+    const cfg = navMap[href];
+    if (!cfg) return;
+    setButtonWithIcon(a, cfg.icon, cfg.label);
+  });
+  setButtonWithIcon(document.getElementById('refresh-runs'), 'refresh', 'Refresh');
+  setButtonWithIcon(document.getElementById('logout-btn'), 'logout', 'Logout');
+  setButtonWithIcon(document.getElementById('add-app-btn'), 'plus', 'Add app');
+  setButtonWithIcon(document.getElementById('add-step-btn'), 'plus', 'Add step');
+}
 
 function applyTheme(theme) {
   const root = document.documentElement;
@@ -10,7 +56,10 @@ function applyTheme(theme) {
   } catch (_) {}
   const themeBtn = document.getElementById('theme-toggle-btn');
   if (themeBtn) {
-    themeBtn.textContent = finalTheme === 'dark' ? 'Light mode' : 'Dark mode';
+    const nextIsLight = finalTheme === 'dark';
+    const icon = nextIsLight ? 'sun' : 'moon';
+    const label = nextIsLight ? 'Light mode' : 'Dark mode';
+    themeBtn.innerHTML = `${iconMarkup(icon)}<span class="btn-label">${label}</span>`;
   }
 }
 
@@ -428,6 +477,16 @@ function statusClass(status) {
   }
 }
 
+function statusLabel(status) {
+  switch (status) {
+    case 'pending': return 'Pending';
+    case 'running': return 'Running';
+    case 'success': return 'Success';
+    case 'failed': return 'Failed';
+    default: return 'Pending';
+  }
+}
+
 function formatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -467,9 +526,9 @@ function renderApps(container, apps) {
       <h3>${escapeHtml(app.name)}</h3>
       <p class="app-id">${escapeHtml(app.id)}</p>
       <div class="card-actions">
-        <button type="button" class="btn btn-primary run-btn btn-run" data-app-id="${escapeHtml(app.id)}">Run</button>
-        <button type="button" class="btn btn-ghost edit-btn btn-edit" data-app-id="${escapeHtml(app.id)}">Edit</button>
-        ${currentUser && currentUser.is_admin ? `<button type="button" class="btn btn-ghost delete-btn btn-delete" data-app-id="${escapeHtml(app.id)}">Delete</button>` : ''}
+        <button type="button" class="btn btn-primary run-btn btn-run" data-app-id="${escapeHtml(app.id)}">${iconMarkup('play')}<span class="btn-label">Run</span></button>
+        <button type="button" class="btn btn-ghost edit-btn btn-edit" data-app-id="${escapeHtml(app.id)}">${iconMarkup('edit')}<span class="btn-label">Edit</span></button>
+        ${currentUser && currentUser.is_admin ? `<button type="button" class="btn btn-ghost delete-btn btn-delete" data-app-id="${escapeHtml(app.id)}">${iconMarkup('delete')}<span class="btn-label">Delete</span></button>` : ''}
       </div>
     </article>
   `).join('');
@@ -512,6 +571,11 @@ function renderRuns(container, runs, total, page) {
   const totalCount = typeof total === 'number' ? total : list.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / RUNS_PAGE_SIZE));
   const currentPage = typeof page === 'number' && page >= 1 ? page : 1;
+  const runningCount = list.filter(r => r.status === 'running' || r.status === 'pending').length;
+  const summaryEl = document.getElementById('runs-summary');
+  if (summaryEl) {
+    summaryEl.textContent = `${totalCount} total · ${runningCount} active`;
+  }
 
   if (!list.length && currentPage === 1) {
     container.innerHTML = '<p class="empty-state">No runs yet. Trigger a run from the <a href="/apps.html">Apps</a> page.</p>';
@@ -551,7 +615,7 @@ function renderRuns(container, runs, total, page) {
             <td class="run-id">#${run.id}</td>
             <td>${escapeHtml(run.app_id)}</td>
             <td>${escapeHtml(run.triggered_by || '—')}</td>
-            <td><span class="badge ${statusClass(run.status)}">${escapeHtml(run.status)}</span></td>
+            <td><span class="badge ${statusClass(run.status)}"><span class="status-dot" aria-hidden="true"></span>${statusLabel(run.status)}</span></td>
             <td>${formatDate(run.started_at)}</td>
             <td>${formatDuration(run)}</td>
           </tr>
@@ -616,6 +680,13 @@ function stopInlineLogPolling() {
   expandedRunId = null;
 }
 
+function clearInlineLogPollingTimer() {
+  if (inlineLogPollInterval) {
+    clearInterval(inlineLogPollInterval);
+    inlineLogPollInterval = null;
+  }
+}
+
 async function toggleRunLogInline(runId) {
   const logRow = document.getElementById(`run-log-${runId}`);
   const expandBtn = document.querySelector(`.run-expand-btn[data-run-id="${runId}"]`);
@@ -627,7 +698,6 @@ async function toggleRunLogInline(runId) {
     expandBtn.textContent = '▶';
     if (expandedRunId === runId) {
       stopInlineLogPolling();
-      loadRuns();
     }
     return;
   }
@@ -653,9 +723,9 @@ async function toggleRunLogInline(runId) {
       const run = await getRun(runId);
       currentPre.textContent = run.log || '(no log yet)';
       scrollLogToBottom(currentPre);
+      updateRunRowStatus(run);
       if (run.status === 'success' || run.status === 'failed') {
-        stopInlineLogPolling();
-        loadRuns();
+        clearInlineLogPollingTimer();
       }
     } catch (_) {}
   }
@@ -686,6 +756,21 @@ function stopLogPolling() {
   if (logPollInterval) {
     clearInterval(logPollInterval);
     logPollInterval = null;
+  }
+}
+
+function updateRunRowStatus(run) {
+  const row = document.querySelector(`.run-row[data-run-id="${run.id}"]`);
+  if (!row) return;
+
+  const statusCell = row.children[4];
+  if (statusCell) {
+    statusCell.innerHTML = `<span class="badge ${statusClass(run.status)}"><span class="status-dot" aria-hidden="true"></span>${statusLabel(run.status)}</span>`;
+  }
+
+  const durationCell = row.children[6];
+  if (durationCell) {
+    durationCell.textContent = formatDuration(run);
   }
 }
 
@@ -1829,7 +1914,7 @@ function bindHeaderUser(user) {
   currentUser = user || null;
   const currentUserEl = document.getElementById('current-user');
   if (currentUserEl && user) {
-    currentUserEl.textContent = `${user.username}${user.is_admin ? ' (admin)' : ''}`;
+    currentUserEl.innerHTML = `${iconMarkup('user')}<span class="btn-label">${escapeHtml(user.username)}${user.is_admin ? ' (admin)' : ''}</span>`;
   }
   if (!user || !user.is_admin) {
     document.querySelectorAll('a[href="/access.html"]').forEach(el => {
@@ -1897,6 +1982,7 @@ async function ensureAuthenticated() {
 async function init() {
   applyTheme(getPreferredTheme());
   ensureThemeToggleButton();
+  decorateHeaderButtonIcons();
   markActiveNavLink();
   const reachable = await checkServerReachable();
   if (!reachable) {
@@ -1907,6 +1993,7 @@ async function init() {
   const me = await ensureAuthenticated();
   if (!me) return;
   ensureThemeToggleButton();
+  decorateHeaderButtonIcons();
   bindHeaderUser(me);
   const isAccessPage = !!document.getElementById('groups-container');
   const isGroupPage = !!document.getElementById('group-title');
