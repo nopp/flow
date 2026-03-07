@@ -1845,6 +1845,17 @@ function bindHeaderUser(user) {
   }
 }
 
+function markActiveNavLink() {
+  const path = window.location.pathname || '/';
+  const normalized = path === '/index.html' ? '/' : path;
+  document.querySelectorAll('.header-nav a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    if (!href.startsWith('/')) return;
+    const match = href === '/' ? normalized === '/' : normalized === href;
+    a.classList.toggle('active', match);
+  });
+}
+
 async function initLoginPage() {
   const loginForm = document.getElementById('login-form');
   if (!loginForm) return false;
@@ -1886,6 +1897,7 @@ async function ensureAuthenticated() {
 async function init() {
   applyTheme(getPreferredTheme());
   ensureThemeToggleButton();
+  markActiveNavLink();
   const reachable = await checkServerReachable();
   if (!reachable) {
     showServerUnreachableMessage();

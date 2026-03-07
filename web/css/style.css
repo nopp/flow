@@ -519,6 +519,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  animation: headerIn 320ms ease-out;
 }
 
 .app-form-page-card {
@@ -913,6 +914,12 @@ body {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
 
+.header-nav .btn.active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
 .theme-toggle-floating {
   position: fixed;
   top: 1rem;
@@ -934,6 +941,7 @@ body {
 .overlay .log-modal {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  animation: panelIn 320ms ease-out both;
 }
 
 .app-card {
@@ -985,6 +993,75 @@ select.form-input:focus {
 
 .pill {
   border-radius: 999px;
+}
+
+.docs-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem 1.35rem;
+}
+
+.docs-content h2,
+.docs-content h3 {
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
+
+.docs-content code,
+.docs-content pre {
+  background: color-mix(in srgb, var(--bg-card) 75%, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.docs-content code {
+  padding: 0.12rem 0.42rem;
+}
+
+.docs-content pre {
+  padding: 0.8rem 0.95rem;
+  overflow-x: auto;
+}
+
+.docs-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.docs-content th,
+.docs-content td {
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+}
+
+.docs-content th {
+  background: color-mix(in srgb, var(--bg-card) 60%, var(--bg));
+  color: var(--text-muted);
+}
+
+@keyframes headerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 900px) {

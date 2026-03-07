@@ -5,180 +5,143 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NoppFlow — Documentation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg: #0f1419;
-      --card: #1a2129;
-      --border: #2d3748;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #58a6ff;
-      --font: "DM Sans", system-ui, sans-serif;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0 auto;
-      max-width: 960px;
-      padding: 2rem;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      line-height: 1.6;
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    h1 { margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.6rem; }
-    h2 { margin-top: 2rem; color: var(--accent); }
-    code, pre {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.92rem;
-    }
-    code { padding: 0.15rem 0.4rem; }
-    pre { padding: 0.9rem 1rem; overflow-x: auto; }
-    pre code { border: none; padding: 0; background: none; }
-    ul { padding-left: 1.2rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 0.7rem; }
-    th, td { border: 1px solid var(--border); padding: 0.55rem 0.7rem; text-align: left; }
-    th { background: var(--card); color: var(--muted); }
-    .muted { color: var(--muted); }
-    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); }
-  </style>
+  <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
-  <a class="back" href="/">← Back to NoppFlow</a>
+  <div id="app-screen" class="app">
+    <header class="header">
+      <div class="header-row">
+        <div>
+          <h1 class="logo">NoppFlow</h1>
+          <p class="tagline">Lightweight CI/CD for Labs</p>
+        </div>
+        <nav class="header-nav">
+          <a href="/" class="btn btn-ghost">Recent runs</a>
+          <a href="/apps.html" class="btn btn-ghost">Apps</a>
+          <a href="/access.html" class="btn btn-ghost">Access</a>
+          <a href="/docs.html" class="btn btn-ghost active">Docs</a>
+        </nav>
+      </div>
+    </header>
 
-  <h1>NoppFlow Documentation</h1>
-  <p class="muted">This page reflects the current implementation.</p>
+    <main class="main">
+      <section class="section docs-content">
+        <h1>NoppFlow Documentation</h1>
+        <p class="muted">This page reflects the current implementation.</p>
 
-  <h2>Overview</h2>
-  <p>NoppFlow is a lightweight CI/CD server in Go with group-based app access, authentication, and a static web UI.</p>
+        <h2>Overview</h2>
+        <p>NoppFlow is a lightweight CI/CD server in Go with group-based app access, authentication, and a static web UI.</p>
 
-  <h2>Authentication</h2>
-  <ul>
-    <li>Login required for API usage and protected UI features.</li>
-    <li>Cookie-based sessions (<code>HttpOnly</code>).</li>
-    <li>Bootstrap admin is created on startup (default <code>admin/admin</code>).</li>
-    <li>Override bootstrap credentials with <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code>.</li>
-  </ul>
+        <h2>Authentication</h2>
+        <ul>
+          <li>Login required for API usage and protected UI features.</li>
+          <li>Cookie-based sessions (<code>HttpOnly</code>).</li>
+          <li>Bootstrap admin is created on startup (default <code>admin/admin</code>).</li>
+          <li>Override bootstrap credentials with <code>ADMIN_USERNAME</code> and <code>ADMIN_PASSWORD</code>.</li>
+        </ul>
 
-  <h2>Authorization Model</h2>
-  <ul>
-    <li><strong>Admin</strong>: full access (users/groups/app permissions/app lifecycle).</li>
-    <li><strong>Non-admin</strong>: can only see/run/edit apps allowed by group mappings.</li>
-    <li>Non-admin cannot access admin pages (<code>/access.html</code>, <code>/group.html</code>).</li>
-  </ul>
+        <h2>Authorization Model</h2>
+        <ul>
+          <li><strong>Admin</strong>: full access (users/groups/app permissions/app lifecycle).</li>
+          <li><strong>Non-admin</strong>: can only see/run/edit apps allowed by group mappings.</li>
+          <li>Non-admin cannot access admin pages (<code>/access.html</code>, <code>/group.html</code>).</li>
+        </ul>
 
-  <h2>Web Pages</h2>
-  <ul>
-    <li><code>/login.html</code> — login form</li>
-    <li><code>/</code> — recent runs</li>
-    <li><code>/apps.html</code> — apps list and app actions</li>
-    <li><code>/app-form.html</code> — app create/edit with full pipeline + deploy settings</li>
-    <li><code>/profile.html</code> — user profile, own groups/apps, own password change</li>
-    <li><code>/access.html</code> — admin access management</li>
-    <li><code>/group.html?group_id=&lt;id&gt;</code> — admin group detail editor</li>
-  </ul>
+        <h2>Web Pages</h2>
+        <ul>
+          <li><code>/login.html</code> — login form</li>
+          <li><code>/</code> — recent runs</li>
+          <li><code>/apps.html</code> — apps list and app actions</li>
+          <li><code>/app-form.html</code> — app create/edit with full pipeline + deploy settings</li>
+          <li><code>/profile.html</code> — user profile, own groups/apps, own password change</li>
+          <li><code>/access.html</code> — admin access management</li>
+          <li><code>/group.html?group_id=&lt;id&gt;</code> — admin group detail editor</li>
+        </ul>
 
-  <h2>Pipeline</h2>
-  <p>Per run: clone/pull using configured SSH key → execute dynamic app steps in order. Logs are persisted while running.</p>
-  <ul>
-    <li>Each app step has <code>name</code>, one mode (<code>cmd</code>, <code>file</code>, <code>script</code>, <code>k8s_deploy</code>), and optional <code>sleep_sec</code>.</li>
-    <li>Step list is configured per app (not fixed to test/build/deploy).</li>
-    <li>App ID is auto-generated by server on create (<code>app-&lt;hex&gt;</code>).</li>
-    <li>When an app includes <code>k8s_deploy</code>, NoppFlow creates an ephemeral Kubernetes Job in the configured namespace and streams pod logs back to the run.</li>
-    <li>Admin-managed global env vars are injected into all step executions and can be used in command/script steps.</li>
-    <li>Global env vars UI masks values by default and supports edit/delete for admins.</li>
-  </ul>
+        <h2>Pipeline</h2>
+        <p>Per run: clone/pull using configured SSH key → execute dynamic app steps in order. Logs are persisted while running.</p>
+        <ul>
+          <li>Each app step has <code>name</code>, one mode (<code>cmd</code>, <code>file</code>, <code>script</code>, <code>k8s_deploy</code>), and optional <code>sleep_sec</code>.</li>
+          <li>Step list is configured per app (not fixed to test/build/deploy).</li>
+          <li>App ID is auto-generated by server on create (<code>app-&lt;hex&gt;</code>).</li>
+          <li>When an app includes <code>k8s_deploy</code>, NoppFlow creates an ephemeral Kubernetes Job in the configured namespace and streams pod logs back to the run.</li>
+          <li>Admin-managed global env vars are injected into all step executions and can be used in command/script steps.</li>
+          <li>Global env vars UI masks values by default and supports edit/delete for admins.</li>
+        </ul>
 
-  <h2>API</h2>
-  <p>Base: <code>/api</code></p>
+        <h2>API</h2>
+        <p>Base: <code>/api</code></p>
 
-  <h3>Auth</h3>
-  <table>
-    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>POST</td><td><code>/auth/login</code></td><td>Login</td></tr>
-      <tr><td>POST</td><td><code>/auth/logout</code></td><td>Logout</td></tr>
-      <tr><td>GET</td><td><code>/auth/me</code></td><td>Current session user</td></tr>
-      <tr><td>PUT</td><td><code>/auth/password</code></td><td>Change own password</td></tr>
-      <tr><td>GET</td><td><code>/auth/profile</code></td><td>Current profile (groups + accessible apps)</td></tr>
-    </tbody>
-  </table>
+        <h3>Auth</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/auth/login</code></td><td>Login</td></tr>
+            <tr><td>POST</td><td><code>/auth/logout</code></td><td>Logout</td></tr>
+            <tr><td>GET</td><td><code>/auth/me</code></td><td>Current session user</td></tr>
+            <tr><td>PUT</td><td><code>/auth/password</code></td><td>Change own password</td></tr>
+            <tr><td>GET</td><td><code>/auth/profile</code></td><td>Current profile (groups + accessible apps)</td></tr>
+          </tbody>
+        </table>
 
-  <h3>Apps and Runs</h3>
-  <table>
-    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>GET</td><td><code>/apps</code></td><td>List visible apps</td></tr>
-      <tr><td>POST</td><td><code>/apps</code></td><td>Create app (admin)</td></tr>
-      <tr><td>GET</td><td><code>/apps/{appID}</code></td><td>Get app</td></tr>
-      <tr><td>PUT</td><td><code>/apps/{appID}</code></td><td>Update app (admin or allowed user)</td></tr>
-      <tr><td>DELETE</td><td><code>/apps/{appID}</code></td><td>Delete app (admin)</td></tr>
-      <tr><td>GET</td><td><code>/apps/{appID}/groups</code></td><td>Get app-group bindings (admin)</td></tr>
-      <tr><td>PUT</td><td><code>/apps/{appID}/groups</code></td><td>Set app-group bindings (admin)</td></tr>
-      <tr><td>POST</td><td><code>/apps/{appID}/run</code></td><td>Trigger run</td></tr>
-      <tr><td>GET</td><td><code>/runs</code></td><td>List runs (filtered by access)</td></tr>
-      <tr><td>GET</td><td><code>/runs/{id}</code></td><td>Get one run</td></tr>
-    </tbody>
-  </table>
+        <h3>Apps and Runs</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/apps</code></td><td>List visible apps</td></tr>
+            <tr><td>POST</td><td><code>/apps</code></td><td>Create app (admin)</td></tr>
+            <tr><td>GET</td><td><code>/apps/{appID}</code></td><td>Get app</td></tr>
+            <tr><td>PUT</td><td><code>/apps/{appID}</code></td><td>Update app (admin or allowed user)</td></tr>
+            <tr><td>DELETE</td><td><code>/apps/{appID}</code></td><td>Delete app (admin)</td></tr>
+            <tr><td>GET</td><td><code>/apps/{appID}/groups</code></td><td>Get app-group bindings (admin)</td></tr>
+            <tr><td>PUT</td><td><code>/apps/{appID}/groups</code></td><td>Set app-group bindings (admin)</td></tr>
+            <tr><td>POST</td><td><code>/apps/{appID}/run</code></td><td>Trigger run</td></tr>
+            <tr><td>GET</td><td><code>/runs</code></td><td>List runs (filtered by access)</td></tr>
+            <tr><td>GET</td><td><code>/runs/{id}</code></td><td>Get one run</td></tr>
+          </tbody>
+        </table>
 
-  <h3>SSH Keys (Admin)</h3>
-  <table>
-    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>GET</td><td><code>/ssh-keys</code></td><td>List SSH keys (metadata only)</td></tr>
-      <tr><td>POST</td><td><code>/ssh-keys</code></td><td>Create SSH key (name + private_key)</td></tr>
-      <tr><td>DELETE</td><td><code>/ssh-keys/{keyID}</code></td><td>Delete SSH key (blocked if in use)</td></tr>
-    </tbody>
-  </table>
+        <h3>SSH Keys (Admin)</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/ssh-keys</code></td><td>List SSH keys (metadata only)</td></tr>
+            <tr><td>POST</td><td><code>/ssh-keys</code></td><td>Create SSH key (name + private_key)</td></tr>
+            <tr><td>DELETE</td><td><code>/ssh-keys/{keyID}</code></td><td>Delete SSH key (blocked if in use)</td></tr>
+          </tbody>
+        </table>
 
-  <h3>Global Env Vars (Admin)</h3>
-  <table>
-    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>GET</td><td><code>/env-vars</code></td><td>List global env vars</td></tr>
-      <tr><td>POST</td><td><code>/env-vars</code></td><td>Create global env var (name + value)</td></tr>
-      <tr><td>PUT</td><td><code>/env-vars/{envVarID}</code></td><td>Update global env var</td></tr>
-      <tr><td>DELETE</td><td><code>/env-vars/{envVarID}</code></td><td>Delete global env var</td></tr>
-    </tbody>
-  </table>
+        <h3>Global Env Vars (Admin)</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/env-vars</code></td><td>List global env vars</td></tr>
+            <tr><td>POST</td><td><code>/env-vars</code></td><td>Create global env var (name + value)</td></tr>
+            <tr><td>PUT</td><td><code>/env-vars/{envVarID}</code></td><td>Update global env var</td></tr>
+            <tr><td>DELETE</td><td><code>/env-vars/{envVarID}</code></td><td>Delete global env var</td></tr>
+          </tbody>
+        </table>
 
-  <h3>Users and Groups (Admin)</h3>
-  <table>
-    <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>GET</td><td><code>/users</code></td><td>List users</td></tr>
-      <tr><td>POST</td><td><code>/users</code></td><td>Create user</td></tr>
-      <tr><td>PUT</td><td><code>/users/{userID}/groups</code></td><td>Set user groups</td></tr>
-      <tr><td>PUT</td><td><code>/users/{userID}/password</code></td><td>Set user password</td></tr>
-      <tr><td>DELETE</td><td><code>/users/{userID}</code></td><td>Delete user (admin users are protected)</td></tr>
-      <tr><td>GET</td><td><code>/groups</code></td><td>List groups</td></tr>
-      <tr><td>POST</td><td><code>/groups</code></td><td>Create group</td></tr>
-      <tr><td>GET</td><td><code>/groups/{groupID}</code></td><td>Group detail with members/apps</td></tr>
-      <tr><td>PUT</td><td><code>/groups/{groupID}/users</code></td><td>Set group members</td></tr>
-      <tr><td>PUT</td><td><code>/groups/{groupID}/apps</code></td><td>Set group apps</td></tr>
-    </tbody>
-  </table>
-
-  <h2>Data Model</h2>
-  <ul>
-    <li><code>runs</code></li>
-    <li><code>users</code> (includes <code>is_admin</code>)</li>
-    <li><code>groups</code></li>
-    <li><code>user_groups</code></li>
-    <li><code>app_groups</code></li>
-    <li><code>ssh_keys</code></li>
-    <li><code>global_env_vars</code></li>
-  </ul>
-  <p><strong>Important:</strong> deleting an app also deletes all its runs.</p>
-
-  <h2>References</h2>
-  <ul>
-    <li><code>README.md</code> (project usage guide, repository root)</li>
-    <li><code>CODE.md</code> (code-level reference, repository root)</li>
-  </ul>
+        <h3>Users and Groups (Admin)</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/users</code></td><td>List users</td></tr>
+            <tr><td>POST</td><td><code>/users</code></td><td>Create user</td></tr>
+            <tr><td>PUT</td><td><code>/users/{userID}/groups</code></td><td>Set user groups</td></tr>
+            <tr><td>PUT</td><td><code>/users/{userID}/password</code></td><td>Set user password</td></tr>
+            <tr><td>DELETE</td><td><code>/users/{userID}</code></td><td>Delete user (admin users are protected)</td></tr>
+            <tr><td>GET</td><td><code>/groups</code></td><td>List groups</td></tr>
+            <tr><td>POST</td><td><code>/groups</code></td><td>Create group</td></tr>
+            <tr><td>GET</td><td><code>/groups/{groupID}</code></td><td>Group detail with members/apps</td></tr>
+            <tr><td>PUT</td><td><code>/groups/{groupID}/users</code></td><td>Set group members</td></tr>
+            <tr><td>PUT</td><td><code>/groups/{groupID}/apps</code></td><td>Set group apps</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
 </body>
 </html>
